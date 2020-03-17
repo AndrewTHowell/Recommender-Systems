@@ -230,6 +230,34 @@ def user():
         return redirect(url_for('index'))
 
 
+@app.route('/logout/', methods=["POST"])
+def logout():
+    session["logged_in"] = False
+    session["userID"] = None
+
+    flash("Logged out")
+    return redirect(url_for('index'))
+
+
+@app.route('/login/', methods=["POST"])
+def login():
+    form = request.form
+    userID = form["userID"]
+    if userID.isdigit():
+        userID = int(userID)
+        password = form["password"]
+        if passwordCorrect(userID, password):
+            session["logged_in"] = True
+            session["userID"] = userID
+            return redirect(url_for('user'))
+        else:
+            flash("Password rejected")
+            return redirect(url_for('index'))
+    else:
+        flash("Invalid userID")
+        return redirect(url_for('index'))
+
+
 @app.route('/user/recommend/')
 def recommend():
     music = pd.read_csv(CURRENTPATH+"//music.csv")
@@ -371,34 +399,6 @@ def delete():
             flash("You have not rated this music")
 
         return redirect(url_for('delete'))
-
-
-@app.route('/logout/', methods=["POST"])
-def logout():
-    session["logged_in"] = False
-    session["userID"] = None
-
-    flash("Logged out")
-    return redirect(url_for('index'))
-
-
-@app.route('/login/', methods=["POST"])
-def login():
-    form = request.form
-    userID = form["userID"]
-    if userID.isdigit():
-        userID = int(userID)
-        password = form["password"]
-        if passwordCorrect(userID, password):
-            session["logged_in"] = True
-            session["userID"] = userID
-            return redirect(url_for('user'))
-        else:
-            flash("Password rejected")
-            return redirect(url_for('index'))
-    else:
-        flash("Invalid userID")
-        return redirect(url_for('index'))
 
 
 if __name__ == "__main__":
