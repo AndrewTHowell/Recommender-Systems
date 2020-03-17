@@ -26,11 +26,11 @@ CURRENTPATH = dirname(abspath(__file__))
 
 # Credit to https://beckernick.github.io/matrix-factorization-recommender/
 # This function is inspired by this web pages content
-def getPredictionDF(books, ratings):
-    # Create a pivot table, with users as rows, books as columns,
+def getPredictionDF(music, ratings):
+    # Create a pivot table, with users as rows, music as columns,
     # and ratings as cell values
     RDataFrame = ratings.pivot(index="userID",
-                               columns="bookID",
+                               columns="musicID",
                                values="rating").fillna(0)
 
     # Convert to np array
@@ -45,7 +45,7 @@ def getPredictionDF(books, ratings):
     # Run Singular Value Decomposition on the matrix
     # U: user features matrix - how much users like each feature
     # Σ: diagonal matrix singular values/weights
-    # V^T: book features matrix - how relevant each feature is to each book
+    # V^T: music features matrix - how relevant each feature is to each music track
     U, sigma, Vt = svds(demeanedPivot, k=min(demeanedPivot.shape)-1)
 
     # Reconvert the sum back into a diagonal matrix
@@ -64,23 +64,24 @@ def getPredictionDF(books, ratings):
 
 # Credit to https://beckernick.github.io/matrix-factorization-recommender/
 # This function is inspired by this web pages content
-def getRecommendedBooks(userID, books, ratings, predictionDF, recommendSize=5):
+def getRecommendedMusic(userID, music, ratings, predictionDF, recommendSize=5):
 
     # Retrieve and sort the predicted ratings for the user
     sortedUserPredictions = (predictionDF.iloc[userID]
                              .sort_values(ascending=False))
 
-    ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
+    ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
 
-    # Book info from books the user has not rated
-    nonRatedBookInfos = books[(~books['bookID']
-                               .isin(ratedBooksInfo['bookID']))]
+    # Music info from music the user has not rated
+    nonRatedMusicInfos = music[(~music['musicID']
+                                .isin(ratedMusicInfo['musicID']))]
 
     # Merge this info with all predictions
-    mergedInfo = nonRatedBookInfos.merge((pd.DataFrame(sortedUserPredictions)
-                                          .reset_index()),
-                                         how='left',
-                                         left_on='bookID', right_on='bookID')
+    mergedInfo = nonRatedMusicInfos.merge((pd.DataFrame(sortedUserPredictions)
+                                           .reset_index()),
+                                          how='left',
+                                          left_on='musicID',
+                                          right_on='musicID')
 
     # Rename the predictions column from userId to 'Predictions'
     renamedInfo = mergedInfo.rename(columns={userID: 'Predictions'})
@@ -89,89 +90,89 @@ def getRecommendedBooks(userID, books, ratings, predictionDF, recommendSize=5):
     sortedInfo = renamedInfo.sort_values('Predictions', ascending=False)
 
     # Reduce list down to only show top recommendSize rows and
-    recommendedBooks = sortedInfo.iloc[:recommendSize, :-1]
+    recommendedMusic = sortedInfo.iloc[:recommendSize, :-1]
 
-    return recommendedBooks
+    return recommendedMusic
 
 
-def getRatedBookInfo(userID, books, ratings):
+def getRatedMusicInfo(userID, music, ratings):
 
     # Get all of the user's ratings
     userRatings = ratings.loc[ratings["userID"] == userID]
 
-    # Join/merge these ratings with the book info
-    joinedUserRatings = (userRatings.merge(books, how="left",
-                                           left_on='bookID',
-                                           right_on='bookID'
+    # Join/merge these ratings with the music info
+    joinedUserRatings = (userRatings.merge(music, how="left",
+                                           left_on='musicID',
+                                           right_on='musicID'
                                            ).sort_values(['rating'],
                                                          ascending=False))
 
     return joinedUserRatings
 
 
-def editProfile(userID, books, ratings):
+def editProfile(userID, music, ratings):
     exit = False
     while not exit:
         print("\n*** User {0} Menu ***".format(userID))
         print("\n** Ratings **")
-        ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
+        ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
 
-        renamedDF = ratedBooksInfo.rename(columns={"bookID": 'Book ID',
-                                                   "bookTitle": 'Book Title',
-                                                   "bookGenre": 'Book Genres',
+        renamedDF = ratedMusicInfo.rename(columns={"musicID": 'Music ID',
+                                                   "musicTitle": 'Music Title',
+                                                   "musicGenre": 'Music Genres',
                                                    "rating": 'Rating'})
         print(renamedDF)
         stringDF = renamedDF.to_string(index=False, max_rows=10,
-                                       columns={"Book ID",
-                                                "Book Title",
-                                                "Book Genres",
+                                       columns={"Music ID",
+                                                "Music Title",
+                                                "Music Genres",
                                                 "Rating"})
         print(stringDF)
 
         print("\n** Options **")
-        print("1. Add book rating")
-        print("2. Edit book rating")
-        print("3. Delete book rating")
+        print("1. Add music rating")
+        print("2. Edit music rating")
+        print("3. Delete music rating")
         print("9. Return to Main Menu")
 
         menuChoice = input("\nEnter choice: ")
 
         if menuChoice == "1" or menuChoice == "2":
-            bookID = int(input("Enter book ID: "))
-            bookIDsRated = ratedBooksInfo["bookID"].unique()
-            if bookID in bookIDsRated:
+            musicID = int(input("Enter music ID: "))
+            musicIDsRated = ratedMusicInfo["musicID"].unique()
+            if musicID in musicIDsRated:
                 currentRatingRow = ratings.loc[(ratings["userID"] == userID)
-                                               & (ratings["bookID"] == bookID)]
+                                               & (ratings["musicID"] == musicID)]
                 currentRating = currentRatingRow.iloc[0]["rating"]
                 print("You rated it {0}/5".format(currentRating))
                 rating = int(input("Enter rating (0-5): "))
                 ratings.loc[(ratings["userID"] == userID)
-                            & (ratings["bookID"] == bookID), "rating"] = rating
+                            & (ratings["musicID"] == musicID), "rating"] = rating
             else:
                 rating = int(input("Enter rating (0-5): "))
                 ratings = ratings.append(pd.DataFrame([[userID,
-                                                        bookID,
+                                                        musicID,
                                                         rating]],
                                                       columns=["userID",
-                                                               "bookID",
+                                                               "musicID",
                                                                "rating"]),
                                          ignore_index=True)
 
         elif menuChoice == "3":
-            bookID = int(input("Enter book ID: "))
-            bookIDsRated = userRatings["bookID"].unique()
-            if bookID in bookIDsRated:
+            musicID = int(input("Enter music ID: "))
+            musicIDsRated = userRatings["musicID"].unique()
+            if musicID in musicIDsRated:
                 currentRatingRow = ratings.loc[(ratings["userID"] == userID)
-                                               & (ratings["bookID"] == bookID)]
+                                               & (ratings["musicID"] == musicID)]
                 currentRating = currentRatingRow.iloc[0]["rating"]
                 print("You rated it {0}/5".format(currentRating))
                 confirm = input("Confirm delete by typing 'DEL': ").upper()
                 if confirm == "DEL":
                     deleteIndex = ratings[(ratings["userID"] == userID)
-                                          & (ratings["bookID"] == bookID)].index
+                                          & (ratings["musicID"] == musicID)].index
                     ratings.drop(deleteIndex, inplace=True)
             else:
-                print("You have not rated this book")
+                print("You have not rated this music")
         elif menuChoice == "9":
             exit = True
 
@@ -182,14 +183,14 @@ def passwordCorrect(userID, password):
     return False
 
 
-def getBooksHTML():
-    books = pd.read_csv(CURRENTPATH+"//books.csv")
-    books = books.rename(columns={"bookID": 'ID',
-                                  "bookTitle": 'Title',
-                                  "bookGenre": 'Genres'})
-    booksHTML = dfToHTML(books)
+def getMusicHTML():
+    music = pd.read_csv(CURRENTPATH+"//music.csv")
+    music = music.rename(columns={"musicID": 'ID',
+                                  "musicTitle": 'Title',
+                                  "musicGenre": 'Genres'})
+    vHTML = dfToHTML(music)
 
-    return booksHTML
+    return musicHTML
 
 
 def dfToHTML(df):
@@ -212,9 +213,9 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/books/')
-def books():
-    return render_template('books.html', tables=[getBooksHTML()])
+@app.route('/music/')
+def music():
+    return render_template('music.html', tables=[getMusicHTML()])
 
 
 @app.route('/user/')
@@ -231,18 +232,18 @@ def user():
 
 @app.route('/user/recommend/')
 def recommend():
-    books = pd.read_csv(CURRENTPATH+"//books.csv")
+    music = pd.read_csv(CURRENTPATH+"//music.csv")
     ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
     userID = session["userID"]
 
-    predictionDF = getPredictionDF(books, ratings)
+    predictionDF = getPredictionDF(music, ratings)
 
-    recommendedBooks = getRecommendedBooks(userID, books, ratings,
+    recommendedMusic = getRecommendedMusic(userID, music, ratings,
                                            predictionDF)
 
-    df = recommendedBooks.rename(columns={"bookID": 'Book ID',
-                                          "bookTitle": 'Book Title',
-                                          "bookGenre": 'Book Genres'})
+    df = recommendedMusic.rename(columns={"musicID": 'Music ID',
+                                          "musicTitle": 'Music Title',
+                                          "musicGenre": 'Music Genres'})
 
     dfHTML = dfToHTML(df)
 
@@ -251,20 +252,20 @@ def recommend():
 
 @app.route('/user/profile')
 def profile():
-    books = pd.read_csv(CURRENTPATH+"//books.csv")
+    music = pd.read_csv(CURRENTPATH+"//music.csv")
     ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
     userID = session["userID"]
 
-    ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
+    ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
 
-    renamedDF = ratedBooksInfo.rename(columns={"bookID": 'Book ID',
-                                               "bookTitle": 'Book Title',
-                                               "bookGenre": 'Book Genres',
+    renamedDF = ratedMusicInfo.rename(columns={"musicID": 'Music ID',
+                                               "musicTitle": 'Music Title',
+                                               "musicGenre": 'Music Genres',
                                                "rating": 'Rating'})
 
-    dfHTML = renamedDF.to_html(index=False, columns={"Book ID",
-                                                     "Book Title",
-                                                     "Book Genres",
+    dfHTML = renamedDF.to_html(index=False, columns={"Music ID",
+                                                     "Music Title",
+                                                     "Music Genres",
                                                      "Rating"})
 
     return render_template('profile.html', tables=[dfHTML])
@@ -273,61 +274,61 @@ def profile():
 @app.route('/user/profile/add', methods=["POST", "GET"])
 def add():
     if request.method == "GET":
-        return render_template('add.html', tables=[getBooksHTML()])
+        return render_template('add.html', tables=[getMusicHTML()])
     else:
         ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
         form = request.form
         userID = session["userID"]
-        bookID = form["bookID"]
+        musicID = form["musicID"]
         rating = form["rating"]
-        ratings = ratings.append(pd.DataFrame([[userID, bookID, rating]],
+        ratings = ratings.append(pd.DataFrame([[userID, musicID, rating]],
                                               columns=["userID",
-                                                       "bookID",
+                                                       "musicID",
                                                        "rating"]),
                                  ignore_index=True)
         ratings.to_csv(CURRENTPATH+"//ratings.csv", index=False)
-        flash("Book rating added")
+        flash("Music rating added")
         return redirect(url_for('add'))
 
 
 @app.route('/user/profile/edit', methods=["POST", "GET"])
 def edit():
     if request.method == "GET":
-        books = pd.read_csv(CURRENTPATH+"//books.csv")
+        music = pd.read_csv(CURRENTPATH+"//music.csv")
         ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
         userID = session["userID"]
 
-        ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
+        ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
 
-        renamedDF = ratedBooksInfo.rename(columns={"bookID": 'Book ID',
-                                                   "bookTitle": 'Book Title',
-                                                   "bookGenre": 'Book Genres',
+        renamedDF = ratedMusicInfo.rename(columns={"musicID": 'Music ID',
+                                                   "musicTitle": 'Music Title',
+                                                   "musicGenre": 'Music Genres',
                                                    "rating": 'Rating'})
 
-        dfHTML = renamedDF.to_html(index=False, columns={"Book ID",
-                                                         "Book Title",
-                                                         "Book Genres",
+        dfHTML = renamedDF.to_html(index=False, columns={"Music ID",
+                                                         "Music Title",
+                                                         "Music Genres",
                                                          "Rating"})
 
         return render_template('edit.html', tables=[dfHTML])
     else:
-        books = pd.read_csv(CURRENTPATH+"//books.csv")
+        music = pd.read_csv(CURRENTPATH+"//music.csv")
         ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
         form = request.form
         userID = session["userID"]
-        bookID = int(form["bookID"])
+        musicID = int(form["musicID"])
         rating = form["rating"]
-        ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
-        bookIDsRated = ratedBooksInfo["bookID"].unique()
-        if bookID in bookIDsRated:
+        ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
+        musicIDsRated = ratedMusicInfo["musicID"].unique()
+        if musicID in musicIDsRated:
             print(ratings.loc[(ratings["userID"] == userID)
-                              & (ratings["bookID"] == bookID)])
+                              & (ratings["musicID"] == musicID)])
             ratings.loc[(ratings["userID"] == userID)
-                        & (ratings["bookID"] == bookID), "rating"] = rating
+                        & (ratings["musicID"] == musicID), "rating"] = rating
 
             ratings.to_csv(CURRENTPATH+"//ratings.csv", index=False)
         else:
-            flash("You have not rated this book")
+            flash("You have not rated this music")
 
         return redirect(url_for('edit'))
 
@@ -335,39 +336,39 @@ def edit():
 @app.route('/user/profile/delete', methods=["POST", "GET"])
 def delete():
     if request.method == "GET":
-        books = pd.read_csv(CURRENTPATH+"//books.csv")
+        music = pd.read_csv(CURRENTPATH+"//music.csv")
         ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
         userID = session["userID"]
 
-        ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
+        ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
 
-        renamedDF = ratedBooksInfo.rename(columns={"bookID": 'Book ID',
-                                                   "bookTitle": 'Book Title',
-                                                   "bookGenre": 'Book Genres',
+        renamedDF = ratedMusicInfo.rename(columns={"musicID": 'Music ID',
+                                                   "musicTitle": 'Music Title',
+                                                   "musicGenre": 'Music Genres',
                                                    "rating": 'Rating'})
 
-        dfHTML = renamedDF.to_html(index=False, columns={"Book ID",
-                                                         "Book Title",
-                                                         "Book Genres",
+        dfHTML = renamedDF.to_html(index=False, columns={"Music ID",
+                                                         "Music Title",
+                                                         "Music Genres",
                                                          "Rating"})
 
         return render_template('delete.html', tables=[dfHTML])
     else:
-        books = pd.read_csv(CURRENTPATH+"//books.csv")
+        music = pd.read_csv(CURRENTPATH+"//music.csv")
         ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
         form = request.form
         userID = session["userID"]
-        bookID = int(form["bookID"])
-        ratedBooksInfo = getRatedBookInfo(userID, books, ratings)
-        bookIDsRated = ratedBooksInfo["bookID"].unique()
-        if bookID in bookIDsRated:
+        musicID = int(form["musicID"])
+        ratedMusicInfo = getRatedMusicInfo(userID, music, ratings)
+        musicIDsRated = ratedMusicInfo["musicID"].unique()
+        if musicID in musicIDsRated:
             deleteIndex = ratings[(ratings["userID"] == userID)
-                                  & (ratings["bookID"] == bookID)].index
+                                  & (ratings["musicID"] == musicID)].index
             ratings.drop(deleteIndex, inplace=True)
 
             ratings.to_csv(CURRENTPATH+"//ratings.csv", index=False)
         else:
-            flash("You have not rated this book")
+            flash("You have not rated this music")
 
         return redirect(url_for('delete'))
 
