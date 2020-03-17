@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+
+    <h1 class="display-3">Based on your previous ratings, we recommend:</h1>
+
+    {% for table in tables %}
+        {{ table|safe }}
+    {% endfor %}
+
+{% endblock %}

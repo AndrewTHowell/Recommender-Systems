@@ -1,0 +1,57 @@
+<html>
+    <head>
+      <title>b00ks.com</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-sm bg-dark navbar-dark">
+            <div class="col-lg-9">
+                <a class="navbar-brand" href="/">b00ks.com</a>
+
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/books">All books</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/user">User Dashboard</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="d-flex justify-content-end col-lg-3">
+                {% if "logged_in" not in session or session["logged_in"] == False %}
+                    <form action="/login" method="POST">
+                        <div class="form-group">
+                            <input type="text" name="userID" value="" placeholder="User ID" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="password" name="password" value="" placeholder="Password" required>
+                        </div>
+                        <div class="form-group">
+                            <input class="btn btn-success" type="submit">
+                        </div>
+                    </form>
+                {% else %}
+                    <form action="/logout" method="POST">
+                        <button type="submit" class="btn btn-danger">Logout</button>
+                    </form>
+                {% endif %}
+            </div>
+        </nav>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times</span></button>
+                        {{message}}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </body>
+</html>
