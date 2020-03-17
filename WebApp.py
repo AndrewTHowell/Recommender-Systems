@@ -188,7 +188,7 @@ def getMusicHTML():
     music = music.rename(columns={"musicID": 'ID',
                                   "musicTitle": 'Title',
                                   "musicGenre": 'Genres'})
-    vHTML = dfToHTML(music)
+    musicHTML = dfToHTML(music)
 
     return musicHTML
 
