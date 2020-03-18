@@ -79,20 +79,25 @@ class Recommender():
                                          index=self.R.index,
                                          columns=self.R.columns)
 
-        print("self.estimate(1001, 251)")
-        print(self.estimate(1001, 251))
-
-    def estimate(self, userID, itemID):
-
-        qiTpu = self.predictionDF.loc[userID][itemID]
-
-        mu = self.ratingsMean
 
         biasUser = self.userRatingsMeanDF.loc[userID] - mu
 
         biasItem = self.itemRatingsMeanDF.loc[itemID] - mu
 
-        return (qiTpu + mu + biasItem + biasUser)
+    def originalRating(self, userID, itemID):
+
+        return self.R.loc[userID][itemID]
+
+    def predictedRating(self, userID, itemID):
+
+        return self.predictionDF.loc[userID][itemID]
+
+    def errorOfPrediction(self, userID, itemID):
+        error = (self.originalRating(userID, itemID)
+                 - self.predictedRating(userID, itemID))
+
+        return error
+
 
 # Section End
 
