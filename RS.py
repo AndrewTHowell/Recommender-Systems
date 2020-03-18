@@ -8,7 +8,6 @@ from os.path import dirname, abspath
 import numpy as np
 
 from scipy.sparse.linalg import svds
-from scipy.linalg import svd
 
 # Section End
 
@@ -26,55 +25,96 @@ class Recommender():
     def __init__(self):
         contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
-        print("contextualRatings")
-        print(contextualRatings)
-
-        groupedRatings = contextualRatings.groupby(["userID", "itemID"]).mean().reset_index()
-
-        print("groupedRatings")
-        print(groupedRatings)
+        groupedRatings = contextualRatings.groupby(["userID", "itemID"]
+                                                   ).mean().reset_index()
 
         self.R = groupedRatings.pivot(index="userID",
                                       columns="itemID",
-                                      values="rating").fillna(0)
+                                      values="rating")
 
         print("self.R")
         print(self.R)
 
     def train(self):
         # Convert to np array
-        self.R = RDataFrame.values
+        ratings = self.R.values
+        #print("ratings")
+        #print(ratings)
 
-        # Find mean of ratings
-        userRatingsMean = np.mean(R, axis=1)
+        # Find mean of all ratings
+        ratingsMean = np.nanmean(ratings)
+        #print("ratingsMean")
+        #print(ratingsMean)
 
-        # De-mean all values in np array
-        demeanedPivot = R - userRatingsMean.reshape(-1, 1)
+        # Find mean of ratings per user
+        userRatingsMean = np.nanmean(ratings, axis=1)
+        #print("userRatingsMean")
+        #print(userRatingsMean)
+
+        userRatingsMeanDF = pd.DataFrame(userRatingsMean,
+                                         index=self.R.index,
+                                         columns=["Mean Rating"])
+        #print("userRatingsMeanDF")
+        #print(userRatingsMeanDF)
+
+        # Find mean of ratings per item
+        itemRatingsMean = np.nanmean(ratings, axis=0)
+        #print("itemRatingsMean")
+        #print(itemRatingsMean)
+
+        itemRatingsMeanDF = pd.DataFrame(itemRatingsMean,
+                                         index=self.R.columns,
+                                         columns=["Mean Rating"])
+        #print("itemRatingsMeanDF")
+        #print(itemRatingsMeanDF)
+
+        # Convert NaNs to 0
+        ratings = np.nan_to_num(ratings)
+        #print("ratings")
+        #print(ratings)
 
         # Run Singular Value Decomposition on the matrix
         # U: user features matrix - how much users like each feature
         # Σ: diagonal matrix singular values/weights
-        # V^T: book features matrix - how relevant each feature is to each book
-        U, sigma, Vt = svds(demeanedPivot, k=min(demeanedPivot.shape)-1)
+        # V^T: music features matrix - how relevant each feature is to each music
+        U, sigma, Vt = svds(ratings, k=min(ratings.shape)-1)
 
         # Reconvert the sum back into a diagonal matrix
         sigma = np.diag(sigma)
 
-        # Follow the formula ratings formula R=UΣ(V^T), adding back on the means
-        allPredictedRatings = (np.dot(np.dot(U, sigma), Vt)
-                               + userRatingsMean.reshape(-1, 1))
+        # Dot product of sigma Vt
+        sigmaVt = np.dot(sigma, Vt)
+
+        self.P = U
+        #print("self.P")
+        #print(self.P)
+        self.Q = sigmaVt
+        #print("self.Q")
+        #print(self.Q)
+
+        # Follow the formula ratings formula R=UΣ(V^T)
+        allPredictedRatings = np.dot(U, sigmaVt)
 
         # Convert back to workable DataFrame
         predictionDF = pd.DataFrame(allPredictedRatings,
-                                    columns=RDataFrame.columns)
+                                    columns=self.R.columns)
 
-    def predict(self, user, context):
+        #print("predictionDF")
+        #print(predictionDF)
+
+    def estimate(self, userID, context):
+
+        # Row of items and ratings for user(not contextual)
+        # self.R.loc[userID]
+
         pass
 
 # Section End
 
 
 RS = Recommender()
+
+RS.train()
 
 """
 # Find mean of ratings
