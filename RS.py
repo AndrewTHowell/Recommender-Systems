@@ -32,46 +32,30 @@ class Recommender():
                                       columns="itemID",
                                       values="rating")
 
-        print("self.R")
-        print(self.R)
+        #print("self.R")
+        #print(self.R)
 
     def train(self):
         # Convert to np array
         ratings = self.R.values
-        #print("ratings")
-        #print(ratings)
 
         # Find mean of all ratings
-        ratingsMean = np.nanmean(ratings)
-        #print("ratingsMean")
-        #print(ratingsMean)
+        self.ratingsMean = np.nanmean(ratings)
 
         # Find mean of ratings per user
-        userRatingsMean = np.nanmean(ratings, axis=1)
-        #print("userRatingsMean")
-        #print(userRatingsMean)
+        self.userRatingsMean = np.nanmean(ratings, axis=1)
 
-        userRatingsMeanDF = pd.DataFrame(userRatingsMean,
-                                         index=self.R.index,
-                                         columns=["Mean Rating"])
-        #print("userRatingsMeanDF")
-        #print(userRatingsMeanDF)
+        self.userRatingsMeanDF = pd.Series(self.userRatingsMean,
+                                           index=self.R.index)
 
         # Find mean of ratings per item
-        itemRatingsMean = np.nanmean(ratings, axis=0)
-        #print("itemRatingsMean")
-        #print(itemRatingsMean)
+        self.itemRatingsMean = np.nanmean(ratings, axis=0)
 
-        itemRatingsMeanDF = pd.DataFrame(itemRatingsMean,
-                                         index=self.R.columns,
-                                         columns=["Mean Rating"])
-        #print("itemRatingsMeanDF")
-        #print(itemRatingsMeanDF)
+        self.itemRatingsMeanDF = pd.Series(self.itemRatingsMean,
+                                           index=self.R.columns)
 
         # Convert NaNs to 0
         ratings = np.nan_to_num(ratings)
-        #print("ratings")
-        #print(ratings)
 
         # Run Singular Value Decomposition on the matrix
         # U: user features matrix - how much users like each feature
@@ -86,28 +70,29 @@ class Recommender():
         sigmaVt = np.dot(sigma, Vt)
 
         self.P = U
-        #print("self.P")
-        #print(self.P)
         self.Q = sigmaVt
-        #print("self.Q")
-        #print(self.Q)
 
         # Follow the formula ratings formula R=UΣ(V^T)
-        allPredictedRatings = np.dot(U, sigmaVt)
+        self.predictionMatrix = np.dot(U, sigmaVt)
 
-        # Convert back to workable DataFrame
-        predictionDF = pd.DataFrame(allPredictedRatings,
-                                    columns=self.R.columns)
+        self.predictionDF = pd.DataFrame(self.predictionMatrix,
+                                         index=self.R.index,
+                                         columns=self.R.columns)
 
-        #print("predictionDF")
-        #print(predictionDF)
+        print("self.estimate(1001, 251)")
+        print(self.estimate(1001, 251))
 
-    def estimate(self, userID, context):
+    def estimate(self, userID, itemID):
 
-        # Row of items and ratings for user(not contextual)
-        # self.R.loc[userID]
+        qiTpu = self.predictionDF.loc[userID][itemID]
 
-        pass
+        mu = self.ratingsMean
+
+        biasUser = self.userRatingsMeanDF.loc[userID] - mu
+
+        biasItem = self.itemRatingsMeanDF.loc[itemID] - mu
+
+        return (qiTpu + mu + biasItem + biasUser)
 
 # Section End
 
