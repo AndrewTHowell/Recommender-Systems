@@ -22,6 +22,35 @@
                     </li>
                 </ul>
             </div>
+            <div class="col-lg-9">
+                <form action="/mood" method="POST">
+                    <div class="form-group">
+                        <select class="form-control" id="mood" name="mood">
+                        {% if session["mood"] == "Happy" %}
+                            <option selected="selected">Happy</option>
+                        {% else %}
+                            <option>Happy</option>
+                        {% endif %}
+                        {% if session["mood"] == "Sad" %}
+                            <option selected="selected">Sad</option>
+                        {% else %}
+                            <option>Sad</option>
+                        {% endif %}
+                        {% if session["mood"] == "Active" %}
+                            <option selected="selected">Active</option>
+                        {% else %}
+                            <option>Active</option>
+                        {% endif %}
+                        {% if session["mood"] == "Lazy" %}
+                            <option selected="selected">Lazy</option>
+                        {% else %}
+                            <option>Lazy</option>
+                        {% endif %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Change mood</button>
+                </form>
+            </div>
             <div class="d-flex justify-content-end col-lg-3">
                 {% if "logged_in" not in session or session["logged_in"] == False %}
                     <form action="/login" method="POST">
