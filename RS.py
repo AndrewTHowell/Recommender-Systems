@@ -26,10 +26,16 @@ class Recommender():
     def __init__(self):
         contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
-        groupedRatings = contextualRatings.groupby(["userID", "itemID"]).mean()
+        print("contextualRatings")
+        print(contextualRatings)
+
+        groupedRatings = contextualRatings.groupby(["userID", "itemID"]).mean().reset_index()
+
+        print("groupedRatings")
+        print(groupedRatings)
 
         self.R = groupedRatings.pivot(index="userID",
-                                      columns="musicID",
+                                      columns="itemID",
                                       values="rating").fillna(0)
 
         print("self.R")
