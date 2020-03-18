@@ -7,6 +7,7 @@ from os.path import dirname, abspath
 import numpy as np
 
 from scipy.sparse.linalg import svds
+from scipy.linalg import svd
 
 from flask import Flask, redirect, url_for, request
 from flask import render_template, flash,  session
@@ -19,7 +20,64 @@ import os
 
 CURRENTPATH = dirname(abspath(__file__))
 
+USERBASELINEPARAMETER = 1
+
 # Section End
+
+ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
+
+RDataFrame = ratings.pivot(index="userID",
+                           columns="musicID",
+                           values="rating").fillna(0)
+
+# Convert to np array
+R = RDataFrame.values
+
+print("RDataFrame")
+print(RDataFrame)
+
+# Find mean of ratings
+itemRatingsMeanVector = np.mean(R, axis=0)
+
+print("itemRatingsMeanVector")
+print(itemRatingsMeanVector)
+
+itemRatingsMeanMatrix = np.repeat(np.array([itemRatingsMeanVector]),
+                                  R.shape[0], axis=0)
+
+print("itemRatingsMeanMatrix")
+print(itemRatingsMeanMatrix)
+
+userBaselineParameterMatrix = np.zeros(R.shape)
+userBaselineParameterMatrix.fill(USERBASELINEPARAMETER)
+
+print("userBaselineParameterMatrix")
+print(userBaselineParameterMatrix)
+
+U, sigma, Vt = svd(R)
+
+print("U")
+print(U.shape)
+print(U)
+
+print("sigma")
+print(sigma.shape)
+print(sigma)
+
+sigma = np.diag(sigma)
+
+print("sigma (diagonal)")
+print(sigma.shape)
+print(sigma)
+
+print("Vt")
+print(Vt.shape)
+print(Vt)
+
+# allPredictedRatings = (np.dot(U, Vt))
+
+# Convert back to workable DataFrame
+#predictionDF = pd.DataFrame(allPredictedRatings, columns=RDataFrame.columns)
 
 # Section: Functions
 
@@ -32,6 +90,42 @@ def getPredictionDF(music, ratings):
     RDataFrame = ratings.pivot(index="userID",
                                columns="musicID",
                                values="rating").fillna(0)
+
+    # Convert to np array
+    R = RDataFrame.values
+
+    print("RDataFrame")
+    print(RDataFrame)
+
+    # Find mean of ratings
+    itemRatingsMeanVector = np.mean(R, axis=0)
+
+    print("itemRatingsMeanVector")
+    print(itemRatingsMeanVector)
+
+    # Run Singular Value Decomposition on the matrix
+    # U: user features matrix - how much users like each feature
+    # Σ: diagonal matrix singular values/weights
+    # V^T: music features matrix - how relevant each feature is to each music track
+    U, sigma, Vt = svd(R)
+
+    allPredictedRatings = (np.dot(U, Vt))
+
+    # Convert back to workable DataFrame
+    predictionDF = pd.DataFrame(allPredictedRatings,
+                                columns=RDataFrame.columns)
+
+    return predictionDF
+
+
+def OLDgetPredictionDF(music, ratings):
+    # Create a pivot table, with users as rows, music as columns,
+    # and ratings as cell values
+    RDataFrame = ratings.pivot(index="userID",
+                               columns="musicID",
+                               values="rating").fillna(0)
+
+    print(RDataFrame)
 
     # Convert to np array
     R = RDataFrame.values
@@ -62,8 +156,6 @@ def getPredictionDF(music, ratings):
     return predictionDF
 
 
-# Credit to https://beckernick.github.io/matrix-factorization-recommender/
-# This function is inspired by this web pages content
 def getRecommendedMusic(userID, music, ratings, predictionDF, recommendSize=5):
 
     # Retrieve and sort the predicted ratings for the user
@@ -210,7 +302,17 @@ app.secret_key = os.urandom(16)
 
 @app.route('/')
 def index():
+    if "mood" not in session:
+        session["mood"] = "Happy"
     return render_template('index.html')
+
+
+@app.route('/mood/', methods=["POST"])
+def changeMood():
+    form = request.form
+    session["mood"] = form["mood"]
+
+    return redirect(request.referrer)
 
 
 @app.route('/music/')
@@ -263,6 +365,7 @@ def recommend():
     music = pd.read_csv(CURRENTPATH+"//music.csv")
     ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
     userID = session["userID"]
+    mood = session["mood"]
 
     predictionDF = getPredictionDF(music, ratings)
 
