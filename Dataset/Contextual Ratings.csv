@@ -1,4 +1,4 @@
-UserID,ItemID, Rating,Mood
+userID,itemID,rating,mood
 1001,251,3,active
 1001,294,2,lazy
 1001,694,0,lazy
