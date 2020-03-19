@@ -5,9 +5,14 @@ import pandas as pd
 import os
 from os.path import dirname, abspath
 
+import sys
+
 import numpy as np
+#np.set_printoptions(threshold=sys.maxsize)
 
 from scipy.sparse.linalg import svds
+
+import matplotlib.pyplot as plt
 
 # Section End
 
@@ -22,37 +27,40 @@ DATASETPATH = dirname(abspath(__file__)) + "//Dataset//"
 
 class Recommender():
 
-    def __init__(self):
+    def __init__(self, epochs, regularisationLambda, learningRate):
+        self.epochs = epochs
+        self.regularisationLambda = regularisationLambda
+        self.learningRate = learningRate
+
         contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
         groupedRatings = contextualRatings.groupby(["userID", "itemID"]
                                                    ).mean().reset_index()
 
-        self.R = groupedRatings.pivot(index="userID",
-                                      columns="itemID",
-                                      values="rating")
+        self.originalRatings = groupedRatings.pivot(index="userID",
+                                                    columns="itemID",
+                                                    values="rating")
 
-        #print("self.R")
-        #print(self.R)
+        self.train()
 
     def train(self):
         # Convert to np array
-        ratings = self.R.values
+        ratings = self.originalRatings.values
 
         # Find mean of all ratings
         self.ratingsMean = np.nanmean(ratings)
 
         # Find mean of ratings per user
-        self.userRatingsMean = np.nanmean(ratings, axis=1)
+        userRatingsMean = np.nanmean(ratings, axis=1)
 
-        self.userRatingsMeanDF = pd.Series(self.userRatingsMean,
-                                           index=self.R.index)
+        self.bUsers = pd.Series(userRatingsMean - self.ratingsMean,
+                                index=self.originalRatings.index)
 
         # Find mean of ratings per item
-        self.itemRatingsMean = np.nanmean(ratings, axis=0)
+        itemRatingsMean = np.nanmean(ratings, axis=0)
 
-        self.itemRatingsMeanDF = pd.Series(self.itemRatingsMean,
-                                           index=self.R.columns)
+        self.bItems = pd.Series(itemRatingsMean - self.ratingsMean,
+                                index=self.originalRatings.columns)
 
         # Convert NaNs to 0
         ratings = np.nan_to_num(ratings)
@@ -76,21 +84,97 @@ class Recommender():
         self.predictionMatrix = np.dot(U, sigmaVt)
 
         self.predictionDF = pd.DataFrame(self.predictionMatrix,
-                                         index=self.R.index,
-                                         columns=self.R.columns)
+                                         index=self.originalRatings.index,
+                                         columns=self.originalRatings.columns)
 
+        regularisedRMSEs = []
+        for epoch in range(self.epochs):
+            print("Epoch {0}".format(epoch))
+            regularisedRMSE = 0
+            for userID in self.originalRatings.index:
+                userIndex = self.originalRatings.index.get_loc(userID)
+                for itemID in self.originalRatings.columns:
+                    itemIndex = self.originalRatings.columns.get_loc(itemID)
+                    if not np.isnan(self.originalRatings.loc[userID][itemID]):
 
-        biasUser = self.userRatingsMeanDF.loc[userID] - mu
+                        # Values
+                        Eiu = self.errorOfPrediction(userID, itemID)
 
-        biasItem = self.itemRatingsMeanDF.loc[itemID] - mu
+                        oldBu = self.bUsers.loc[userID]
+                        oldBi = self.bItems.loc[itemID]
+
+                        oldPu = self.P[userIndex]
+                        oldQi = self.Q[:, itemIndex]
+
+                        # RMSE
+                        RMSE = Eiu ** 2
+
+                        #print("Eiu")
+                        #print(Eiu)
+                        #print("RMSE")
+                        #print(RMSE)
+
+                        # Length
+                        length = (oldBu ** 2
+                                  + oldBi ** 2
+                                  + np.linalg.norm(oldPu) ** 2
+                                  + np.linalg.norm(oldQi) ** 2)
+
+                        # regularised RMSE
+                        regularisedRMSE += (RMSE
+                                            + (self.regularisationLambda
+                                               * length))
+
+                        # Stochastic Gradient Descent
+
+                        # Move Pu along toward minimum
+                        newPu = (oldPu + (self.learningRate
+                                          * (Eiu * oldQi
+                                             - (self.regularisationLambda
+                                                * oldPu))))
+
+                        # Move Qi along toward minimum
+                        newQi = (oldQi + (self.learningRate
+                                          * (Eiu * oldPu
+                                             - (self.regularisationLambda
+                                                * oldQi))))
+
+                        # Update Pu and Qi
+                        self.P[userIndex] = newPu
+                        self.Q[:, itemIndex] = newQi
+
+                        # Move Bu along toward minimum
+                        newBu = (oldBu + (self.learningRate
+                                          * (Eiu
+                                             - (self.regularisationLambda
+                                                * oldBu))))
+                        self.bUsers.loc[userID] = newBu
+
+                        # Move Bi along toward minimum
+                        newBi = (oldBi + (self.learningRate
+                                          * (Eiu
+                                             - (self.regularisationLambda
+                                                * oldBi))))
+                        self.bItems.loc[itemID] = newBi
+
+            regularisedRMSEs.append(regularisedRMSE)
+
+        plt.plot(regularisedRMSEs)
+        plt.show()
 
     def originalRating(self, userID, itemID):
 
-        return self.R.loc[userID][itemID]
+        return self.originalRatings.loc[userID][itemID]
 
     def predictedRating(self, userID, itemID):
+        mu = self.ratingsMean
+        Bi = self.bItems.loc[itemID]
+        Bu = self.bUsers.loc[userID]
+        qiTpu = self.predictionDF.loc[userID][itemID]
 
-        return self.predictionDF.loc[userID][itemID]
+        predictedRating = (mu + Bi + Bu + qiTpu)
+
+        return predictedRating
 
     def errorOfPrediction(self, userID, itemID):
         error = (self.originalRating(userID, itemID)
@@ -102,17 +186,4 @@ class Recommender():
 # Section End
 
 
-RS = Recommender()
-
-RS.train()
-
-"""
-# Find mean of ratings
-itemRatingsMeanVector = np.mean(R, axis=0)
-
-itemRatingsMeanMatrix = np.repeat(np.array([itemRatingsMeanVector]),
-                                  R.shape[0], axis=0)
-
-userBaselineParameterMatrix = np.zeros(R.shape)
-userBaselineParameterMatrix.fill(USERBASELINEPARAMETER)
-"""
+RS = Recommender(epochs=50, regularisationLambda=0.02, learningRate=0.005)
