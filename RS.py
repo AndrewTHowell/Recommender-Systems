@@ -36,12 +36,19 @@ class Recommender():
 
         contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
-        groupedRatings = contextualRatings.groupby(["userID", "itemID"]
-                                                   ).mean().reset_index()
+        userItemRatings = contextualRatings.groupby(["userID", "itemID"]
+                                                    ).mean().reset_index()
 
-        self.originalRatings = groupedRatings.pivot(index="userID",
-                                                    columns="itemID",
-                                                    values="rating")
+        itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
+                                                       ).mean().reset_index()
+
+        self.originalRatings = userItemRatings.pivot(index="userID",
+                                                     columns="itemID",
+                                                     values="rating")
+
+        self.contextualItems = itemContextRatings.pivot(index="itemID",
+                                                        columns="mood",
+                                                        values="rating")
 
         self.train()
 
