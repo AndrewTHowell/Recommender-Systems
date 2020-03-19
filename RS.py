@@ -50,9 +50,11 @@ class Recommender():
                                                         columns="mood",
                                                         values="rating")
 
+        self.setupPredictionDF()
+        self.setupContextItems()
         self.train()
 
-    def train(self):
+    def setupPredictionDF(self):
         # Convert to np array
         ratings = self.originalRatings.values
 
@@ -96,6 +98,16 @@ class Recommender():
                                          index=self.originalRatings.index,
                                          columns=self.originalRatings.columns)
 
+    def setupContextItems(self):
+        # Convert to np array
+        ratings = self.contextualItems.values
+
+        # Find mean of all ratings
+        contextualMean = np.nanmean(ratings)
+
+        self.bContextualItems = ratings - contextualMean
+
+    def train(self):
         # Stochastic Gradient Descent
         regularisedRMSEs = []
         for epoch in range(self.epochs):
@@ -136,16 +148,6 @@ class Recommender():
                         regularisedRMSE += (RMSE
                                             + (self.regularisationLambda
                                                * length))
-
-                        if False: #userID == 1001 and itemID == 251:
-                            print("\nActual rating: {0}".format(self.actualRating(userID, itemID)))
-                            print("Predicted rating: {0}".format(self.predictedRating(userID, itemID)))
-                            print("\nRMSE: {0}".format(RMSE))
-                            print("BuSquared: {0}".format(BuSquared))
-                            print("BiSquared: {0}".format(BiSquared))
-                            print("QiNormSquared: {0}".format(QiNormSquared))
-                            print("PuNormSquared: {0}".format(PuNormSquared))
-                            print("regularisedRMSE: {0}\n\n".format(regularisedRMSE))
 
                         # Move Pu along toward minimum
                         newPu = (oldPu + (self.learningRate
