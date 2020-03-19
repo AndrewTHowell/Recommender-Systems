@@ -8,7 +8,7 @@ from os.path import dirname, abspath
 import sys
 
 import numpy as np
-#np.set_printoptions(threshold=sys.maxsize)
+np.set_printoptions(threshold=sys.maxsize)
 
 from scipy.sparse.linalg import svds
 
@@ -100,6 +100,12 @@ class Recommender():
         # Convert to np array
         ratings = self.contextualItems.values
 
+        # Find mean of ratings per user
+        itemRatingsMean = np.nanmean(ratings, axis=1)
+
+        self.bContextualItemMeans = pd.Series(itemRatingsMean - self.ratingsMean,
+                                              index=self.originalRatings.columns)
+
         # Find mean of all ratings
         contextualMean = np.nanmean(ratings)
 
@@ -187,11 +193,14 @@ class Recommender():
         predictionArray += np.mean(predictionArray)
 
         # Add user bias
-        print("self.bUsers")
-        print(self.bUsers)
-        print("self.bUsers.values.flatten()")
-        print(self.bUsers.values.flatten())
-        predictionArray = predictionArray + self.bUsers.values.flatten()
+        predictionArray = np.transpose(np.transpose(predictionArray)
+                                       + self.bUsers.values)
+
+        # Add item bias
+        predictionArray += self.bContextualItemMeans.values
+        self.normalisedPredictionArray = pd.DataFrame(predictionArray,
+                                                      index=self.originalRatings.index,
+                                                      columns=self.originalRatings.columns)
 
         finalRegularisedRMSE = regularisedRMSEs[-1]
         RMSE = sqrt((1/ratings) * finalRegularisedRMSE)
@@ -217,13 +226,17 @@ class Recommender():
 
         return error
 
-    def getRecommendation(self, userID, itemID, context):
-        predictedUserRatings = []
+    def getRecommendation(self, userID, context):
+        predictedUserRatings = self.normalisedPredictionArray.loc[userID]
 
+        for itemID, predictedRating in predictedUserRatings.iteritems():
+            pass
 
 
 # Section End
 
 
-RS = Recommender(epochs=1, regularisationLambda=0.02,
+RS = Recommender(epochs=20, regularisationLambda=0.02,
                  learningRate=0.05, threshold=0.1)
+
+RS.getRecommendation(1001, "happy")
