@@ -190,8 +190,8 @@ class Recommender():
                         # Move Bi along toward minimum
                         if self.context:
                             newBi = ((self.learningRate
-                                     * (Eiu - (self.regularisationLambda
-                                               * oldBi))))
+                                      * (Eiu - (self.regularisationLambda
+                                                * oldBi))))
                             self.bContextualItems[itemIndex] += newBi
                         else:
                             newBi = (oldBi + (self.learningRate
