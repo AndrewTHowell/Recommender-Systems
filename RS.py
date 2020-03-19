@@ -29,10 +29,12 @@ DATASETPATH = dirname(abspath(__file__)) + "//Dataset//"
 
 class Recommender():
 
-    def __init__(self, epochs, regularisationLambda, learningRate, threshold):
+    def __init__(self, epochs, regularisationLambda, learningRate,
+                 context, threshold):
         self.epochs = epochs
         self.regularisationLambda = regularisationLambda
         self.learningRate = learningRate
+        self.context = context
 
         contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
@@ -43,12 +45,13 @@ class Recommender():
                                                      columns="itemID",
                                                      values="rating")
 
-        itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
-                                                       ).mean().reset_index()
+        if self.context:
+            itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
+                                                           ).mean().reset_index()
 
-        self.contextualItems = itemContextRatings.pivot(index="itemID",
-                                                        columns="mood",
-                                                        values="rating")
+            self.contextualItems = itemContextRatings.pivot(index="itemID",
+                                                            columns="mood",
+                                                            values="rating")
 
         self.train()
 
@@ -113,7 +116,8 @@ class Recommender():
 
     def train(self):
         self.setupPredictionDF()
-        self.setupContextItems()
+        if self.context:
+            self.setupContextItems()
 
         # Stochastic Gradient Descent
         regularisedRMSEs = []
@@ -127,27 +131,32 @@ class Recommender():
                     userIndex = self.originalRatings.index.get_loc(userID)
                     if not np.isnan(self.originalRatings.loc[userID][itemID]):
                         # Values
-                        oldBi = self.bContextualItems[itemIndex]
-                        sumOldBi = np.nansum(oldBi)
+                        if self.context:
+                            oldBi = self.bContextualItems[itemIndex]
+                            sumOldBi = np.nansum(oldBi)
+                        else:
+                            oldBi = self.bItems.loc[itemID]
                         oldBu = self.bUsers.loc[userID]
 
                         oldPu = self.P[userIndex]
                         oldQi = self.Q[:, itemIndex]
 
-                        Eiu = self.errorOfPrediction(userID, itemID,
-                                                     sumOldBi, oldBu)
+                        Eiu = self.errorOfPrediction(userID, itemID)
 
                         # RMSE
                         RMSE = Eiu ** 2
 
                         # Length
+                        if self.context:
+                            BiSquared = np.linalg.norm(oldBi) ** 2
+                        else:
+                            BiSquared = oldBi ** 2
                         BuSquared = oldBu ** 2
-                        BiNormSquared = np.linalg.norm(oldBi) ** 2
                         QiNormSquared = np.linalg.norm(oldQi) ** 2
                         PuNormSquared = np.linalg.norm(oldPu) ** 2
 
                         length = (BuSquared
-                                  + BiNormSquared
+                                  + BiSquared
                                   + QiNormSquared
                                   + PuNormSquared)
 
@@ -179,13 +188,21 @@ class Recommender():
                         self.bUsers.loc[userID] = newBu
 
                         # Move Bi along toward minimum
-                        newBi = ((self.learningRate
-                                  * (Eiu - (self.regularisationLambda
-                                            * oldBi))))
-                        self.bContextualItems[itemIndex] += newBi
+                        if self.context:
+                            newBi = ((self.learningRate
+                                     * (Eiu - (self.regularisationLambda
+                                               * oldBi))))
+                            self.bContextualItems[itemIndex] += newBi
+                        else:
+                            newBi = (oldBi + (self.learningRate
+                                              * (Eiu
+                                                 - (self.regularisationLambda
+                                                    * oldBi))))
+                            self.bItems.loc[itemID] = newBi
 
             regularisedRMSEs.append(regularisedRMSE)
 
+        """
         # Format normalised prediction df #
         predictionArray = self.predictionDF.values
 
@@ -201,6 +218,7 @@ class Recommender():
         self.normalisedPredictionArray = pd.DataFrame(predictionArray,
                                                       index=self.originalRatings.index,
                                                       columns=self.originalRatings.columns)
+        """
 
         finalRegularisedRMSE = regularisedRMSEs[-1]
         RMSE = sqrt((1/ratings) * finalRegularisedRMSE)
@@ -212,31 +230,41 @@ class Recommender():
     def actualRating(self, userID, itemID):
         return self.originalRatings.loc[userID][itemID]
 
-    def predictedRating(self, userID, itemID, Bi, Bu):
+    def predictedRating(self, userID, itemID):
         mu = self.ratingsMean
+
+        if self.context:
+            itemIndex = self.originalRatings.columns.get_loc(itemID)
+            Bis = self.bContextualItems[itemIndex]
+            Bi = np.nansum(Bis)
+        else:
+            Bi = self.bItems.loc[itemID]
+
+        Bu = self.bUsers.loc[userID]
+
         qiTpu = self.predictionDF.loc[userID][itemID]
 
         predictedRating = (mu + Bi + Bu + qiTpu)
 
         return predictedRating
 
-    def errorOfPrediction(self, userID, itemID, Bi, Bu):
+    def errorOfPrediction(self, userID, itemID):
         error = (self.actualRating(userID, itemID)
-                 - self.predictedRating(userID, itemID, Bi, Bu))
+                 - self.predictedRating(userID, itemID))
 
         return error
 
     def getRecommendation(self, userID, context):
-        predictedUserRatings = self.normalisedPredictionArray.loc[userID]
-
-        for itemID, predictedRating in predictedUserRatings.iteritems():
-            pass
+        pass
 
 
 # Section End
 
 
 RS = Recommender(epochs=20, regularisationLambda=0.02,
-                 learningRate=0.05, threshold=0.1)
+                 learningRate=0.05, context=False, threshold=0.1)
+print()
+contextRS = Recommender(epochs=20, regularisationLambda=0.02,
+                        learningRate=0.05, context=True, threshold=0.1)
 
-RS.getRecommendation(1001, "happy")
+# RS.getRecommendation(1001, "happy")
