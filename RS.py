@@ -105,7 +105,7 @@ class Recommender():
         # Find mean of all ratings
         contextualMean = np.nanmean(ratings)
 
-        self.bContextualItems = ratings - contextualMean
+        self.bContextualItems = np.nan_to_num(ratings - contextualMean)
 
     def train(self):
         # Stochastic Gradient Descent
@@ -114,32 +114,35 @@ class Recommender():
             print("Epoch {0}".format(epoch + 1))
             regularisedRMSE = 0
             ratings = 0
-            for userID in self.originalRatings.index:
-                userIndex = self.originalRatings.index.get_loc(userID)
-                for itemID in self.originalRatings.columns:
-                    itemIndex = self.originalRatings.columns.get_loc(itemID)
+            for itemID in self.originalRatings.columns:
+                itemIndex = self.originalRatings.columns.get_loc(itemID)
+                for userID in self.originalRatings.index:
+                    userIndex = self.originalRatings.index.get_loc(userID)
+
                     if not np.isnan(self.originalRatings.loc[userID][itemID]):
 
                         # Values
-                        Eiu = self.errorOfPrediction(userID, itemID)
-
+                        oldBi = self.bContextualItems[itemIndex]
+                        sumOldBi = np.nansum(oldBi)
                         oldBu = self.bUsers.loc[userID]
-                        oldBi = self.bItems.loc[itemID]
 
                         oldPu = self.P[userIndex]
                         oldQi = self.Q[:, itemIndex]
+
+                        Eiu = self.errorOfPrediction(userID, itemID,
+                                                     sumOldBi, oldBu)
 
                         # RMSE
                         RMSE = Eiu ** 2
 
                         # Length
                         BuSquared = oldBu ** 2
-                        BiSquared = oldBi ** 2
+                        BiNormSquared = np.linalg.norm(oldBi) ** 2
                         QiNormSquared = np.linalg.norm(oldQi) ** 2
                         PuNormSquared = np.linalg.norm(oldPu) ** 2
 
                         length = (BuSquared
-                                  + BiSquared
+                                  + BiNormSquared
                                   + QiNormSquared
                                   + PuNormSquared)
 
@@ -154,15 +157,13 @@ class Recommender():
                                           * (Eiu * oldQi
                                              - (self.regularisationLambda
                                                 * oldPu))))
+                        self.P[userIndex] = newPu
 
                         # Move Qi along toward minimum
                         newQi = (oldQi + (self.learningRate
                                           * (Eiu * oldPu
                                              - (self.regularisationLambda
                                                 * oldQi))))
-
-                        # Update Pu and Qi
-                        self.P[userIndex] = newPu
                         self.Q[:, itemIndex] = newQi
 
                         # Move Bu along toward minimum
@@ -173,16 +174,15 @@ class Recommender():
                         self.bUsers.loc[userID] = newBu
 
                         # Move Bi along toward minimum
-                        newBi = (oldBi + (self.learningRate
-                                          * (Eiu
-                                             - (self.regularisationLambda
-                                                * oldBi))))
-                        self.bItems.loc[itemID] = newBi
+                        newBi = ((self.learningRate
+                                  * (Eiu - (self.regularisationLambda
+                                            * oldBi))))
+                        self.bContextualItems[itemIndex] += newBi
 
             regularisedRMSEs.append(regularisedRMSE)
 
         finalRegularisedRMSE = regularisedRMSEs[-1]
-        RMSE = sqrt((1/ratings) * regularisedRMSE)
+        RMSE = sqrt((1/ratings) * finalRegularisedRMSE)
         print("\nFinal RMSE: {0}".format(RMSE))
 
         plt.plot(regularisedRMSEs)
@@ -192,19 +192,17 @@ class Recommender():
 
         return self.originalRatings.loc[userID][itemID]
 
-    def predictedRating(self, userID, itemID):
+    def predictedRating(self, userID, itemID, Bi, Bu):
         mu = self.ratingsMean
-        Bi = self.bItems.loc[itemID]
-        Bu = self.bUsers.loc[userID]
         qiTpu = self.predictionDF.loc[userID][itemID]
 
         predictedRating = (mu + Bi + Bu + qiTpu)
 
         return predictedRating
 
-    def errorOfPrediction(self, userID, itemID):
+    def errorOfPrediction(self, userID, itemID, Bi, Bu):
         error = (self.actualRating(userID, itemID)
-                 - self.predictedRating(userID, itemID))
+                 - self.predictedRating(userID, itemID, Bi, Bu))
 
         return error
 
