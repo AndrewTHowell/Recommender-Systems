@@ -39,13 +39,22 @@ class Recommender():
         userItemRatings = contextualRatings.groupby(["userID", "itemID"]
                                                     ).mean().reset_index()
 
+<<<<<<< HEAD
+=======
+        itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
+                                                       ).mean().reset_index()
+
+>>>>>>> 2608ecb64304cf194af653900689c51fa34aa399
         self.originalRatings = userItemRatings.pivot(index="userID",
                                                      columns="itemID",
                                                      values="rating")
 
+<<<<<<< HEAD
         itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
                                                        ).mean().reset_index()
 
+=======
+>>>>>>> 2608ecb64304cf194af653900689c51fa34aa399
         self.contextualItems = itemContextRatings.pivot(index="itemID",
                                                         columns="mood",
                                                         values="rating")
