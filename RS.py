@@ -29,7 +29,7 @@ DATASETPATH = dirname(abspath(__file__)) + "//Dataset//"
 
 class Recommender():
 
-    def __init__(self, epochs, regularisationLambda, learningRate):
+    def __init__(self, epochs, regularisationLambda, learningRate, threshold):
         self.epochs = epochs
         self.regularisationLambda = regularisationLambda
         self.learningRate = learningRate
@@ -50,8 +50,6 @@ class Recommender():
                                                         columns="mood",
                                                         values="rating")
 
-        self.setupPredictionDF()
-        self.setupContextItems()
         self.train()
 
     def setupPredictionDF(self):
@@ -108,6 +106,9 @@ class Recommender():
         self.bContextualItems = np.nan_to_num(ratings - contextualMean)
 
     def train(self):
+        self.setupPredictionDF()
+        self.setupContextItems()
+
         # Stochastic Gradient Descent
         regularisedRMSEs = []
         for epoch in range(self.epochs):
@@ -118,9 +119,7 @@ class Recommender():
                 itemIndex = self.originalRatings.columns.get_loc(itemID)
                 for userID in self.originalRatings.index:
                     userIndex = self.originalRatings.index.get_loc(userID)
-
                     if not np.isnan(self.originalRatings.loc[userID][itemID]):
-
                         # Values
                         oldBi = self.bContextualItems[itemIndex]
                         sumOldBi = np.nansum(oldBi)
@@ -181,6 +180,19 @@ class Recommender():
 
             regularisedRMSEs.append(regularisedRMSE)
 
+        # Format normalised prediction df #
+        predictionArray = self.predictionDF.values
+
+        # Add mu (ratings mean)
+        predictionArray += np.mean(predictionArray)
+
+        # Add user bias
+        print("self.bUsers")
+        print(self.bUsers)
+        print("self.bUsers.values.flatten()")
+        print(self.bUsers.values.flatten())
+        predictionArray = predictionArray + self.bUsers.values.flatten()
+
         finalRegularisedRMSE = regularisedRMSEs[-1]
         RMSE = sqrt((1/ratings) * finalRegularisedRMSE)
         print("\nFinal RMSE: {0}".format(RMSE))
@@ -189,7 +201,6 @@ class Recommender():
         plt.show()
 
     def actualRating(self, userID, itemID):
-
         return self.originalRatings.loc[userID][itemID]
 
     def predictedRating(self, userID, itemID, Bi, Bu):
@@ -206,8 +217,13 @@ class Recommender():
 
         return error
 
+    def getRecommendation(self, userID, itemID, context):
+        predictedUserRatings = []
+
+
 
 # Section End
 
 
-RS = Recommender(epochs=50, regularisationLambda=0.02, learningRate=0.02)
+RS = Recommender(epochs=1, regularisationLambda=0.02,
+                 learningRate=0.05, threshold=0.1)
