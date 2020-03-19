@@ -14,6 +14,8 @@ from scipy.sparse.linalg import svds
 
 import matplotlib.pyplot as plt
 
+from math import sqrt
+
 # Section End
 
 # Section: Constants
@@ -78,7 +80,7 @@ class Recommender():
         sigmaVt = np.dot(sigma, Vt)
 
         self.P = U
-        self.Q = sigmaVt
+        self.Q = Vt
 
         # Follow the formula ratings formula R=UΣ(V^T)
         self.predictionMatrix = np.dot(U, sigmaVt)
@@ -87,10 +89,12 @@ class Recommender():
                                          index=self.originalRatings.index,
                                          columns=self.originalRatings.columns)
 
+        # Stochastic Gradient Descent
         regularisedRMSEs = []
         for epoch in range(self.epochs):
-            print("Epoch {0}".format(epoch))
+            print("Epoch {0}".format(epoch + 1))
             regularisedRMSE = 0
+            ratings = 0
             for userID in self.originalRatings.index:
                 userIndex = self.originalRatings.index.get_loc(userID)
                 for itemID in self.originalRatings.columns:
@@ -109,23 +113,32 @@ class Recommender():
                         # RMSE
                         RMSE = Eiu ** 2
 
-                        #print("Eiu")
-                        #print(Eiu)
-                        #print("RMSE")
-                        #print(RMSE)
-
                         # Length
-                        length = (oldBu ** 2
-                                  + oldBi ** 2
-                                  + np.linalg.norm(oldPu) ** 2
-                                  + np.linalg.norm(oldQi) ** 2)
+                        BuSquared = oldBu ** 2
+                        BiSquared = oldBi ** 2
+                        QiNormSquared = np.linalg.norm(oldQi) ** 2
+                        PuNormSquared = np.linalg.norm(oldPu) ** 2
+
+                        length = (BuSquared
+                                  + BiSquared
+                                  + QiNormSquared
+                                  + PuNormSquared)
 
                         # regularised RMSE
+                        ratings += 1
                         regularisedRMSE += (RMSE
                                             + (self.regularisationLambda
                                                * length))
 
-                        # Stochastic Gradient Descent
+                        if False: #userID == 1001 and itemID == 251:
+                            print("\nActual rating: {0}".format(self.actualRating(userID, itemID)))
+                            print("Predicted rating: {0}".format(self.predictedRating(userID, itemID)))
+                            print("\nRMSE: {0}".format(RMSE))
+                            print("BuSquared: {0}".format(BuSquared))
+                            print("BiSquared: {0}".format(BiSquared))
+                            print("QiNormSquared: {0}".format(QiNormSquared))
+                            print("PuNormSquared: {0}".format(PuNormSquared))
+                            print("regularisedRMSE: {0}\n\n".format(regularisedRMSE))
 
                         # Move Pu along toward minimum
                         newPu = (oldPu + (self.learningRate
@@ -159,10 +172,14 @@ class Recommender():
 
             regularisedRMSEs.append(regularisedRMSE)
 
+        finalRegularisedRMSE = regularisedRMSEs[-1]
+        RMSE = sqrt((1/ratings) * regularisedRMSE)
+        print("\nFinal RMSE: {0}".format(RMSE))
+
         plt.plot(regularisedRMSEs)
         plt.show()
 
-    def originalRating(self, userID, itemID):
+    def actualRating(self, userID, itemID):
 
         return self.originalRatings.loc[userID][itemID]
 
@@ -177,7 +194,7 @@ class Recommender():
         return predictedRating
 
     def errorOfPrediction(self, userID, itemID):
-        error = (self.originalRating(userID, itemID)
+        error = (self.actualRating(userID, itemID)
                  - self.predictedRating(userID, itemID))
 
         return error
@@ -186,4 +203,4 @@ class Recommender():
 # Section End
 
 
-RS = Recommender(epochs=50, regularisationLambda=0.02, learningRate=0.005)
+RS = Recommender(epochs=50, regularisationLambda=0.02, learningRate=0.02)
