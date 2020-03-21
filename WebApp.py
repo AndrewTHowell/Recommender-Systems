@@ -2,82 +2,30 @@
 
 import pandas as pd
 
-from os.path import dirname, abspath
-
-import numpy as np
-
-from scipy.sparse.linalg import svds
-from scipy.linalg import svd
-
 from flask import Flask, redirect, url_for, request
 from flask import render_template, flash,  session
 
 import os
+from os.path import dirname, abspath
+
+import sys
+
+from scipy.sparse.linalg import svds
+
+import matplotlib.pyplot as plt
+
+from math import sqrt
+
+import numpy as np
+np.set_printoptions(threshold=sys.maxsize)
 
 # Section End
 
 # Section: Constants
 
-CURRENTPATH = dirname(abspath(__file__))
-
-USERBASELINEPARAMETER = 1
+DATASETPATH = dirname(abspath(__file__)) + "//Dataset//"
 
 # Section End
-
-ratings = pd.read_csv(CURRENTPATH+"//ratings.csv")
-
-RDataFrame = ratings.pivot(index="userID",
-                           columns="musicID",
-                           values="rating").fillna(0)
-
-# Convert to np array
-R = RDataFrame.values
-
-print("RDataFrame")
-print(RDataFrame)
-
-# Find mean of ratings
-itemRatingsMeanVector = np.mean(R, axis=0)
-
-print("itemRatingsMeanVector")
-print(itemRatingsMeanVector)
-
-itemRatingsMeanMatrix = np.repeat(np.array([itemRatingsMeanVector]),
-                                  R.shape[0], axis=0)
-
-print("itemRatingsMeanMatrix")
-print(itemRatingsMeanMatrix)
-
-userBaselineParameterMatrix = np.zeros(R.shape)
-userBaselineParameterMatrix.fill(USERBASELINEPARAMETER)
-
-print("userBaselineParameterMatrix")
-print(userBaselineParameterMatrix)
-
-U, sigma, Vt = svd(R)
-
-print("U")
-print(U.shape)
-print(U)
-
-print("sigma")
-print(sigma.shape)
-print(sigma)
-
-sigma = np.diag(sigma)
-
-print("sigma (diagonal)")
-print(sigma.shape)
-print(sigma)
-
-print("Vt")
-print(Vt.shape)
-print(Vt)
-
-# allPredictedRatings = (np.dot(U, Vt))
-
-# Convert back to workable DataFrame
-#predictionDF = pd.DataFrame(allPredictedRatings, columns=RDataFrame.columns)
 
 # Section: Functions
 
