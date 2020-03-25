@@ -43,7 +43,7 @@ THRESHOLD = 0.1
 
 class Recommender():
 
-    def __init__(self, context):
+    def __init__(self, context=True, train=True):
         self.epochs = EPOCHS
         self.regularisationLambda = REGULARISATIONLAMBDA
         self.learningRate = LEARNINGRATE
@@ -67,7 +67,8 @@ class Recommender():
                                                             columns="mood",
                                                             values="rating")
 
-        self.train()
+        if train:
+            self.train()
 
     def setupPredictionDF(self):
         # Convert to np array
@@ -216,24 +217,6 @@ class Recommender():
 
             regularisedRMSEs.append(regularisedRMSE)
 
-        """
-        # Format normalised prediction df #
-        predictionArray = self.predictionDF.values
-
-        # Add mu (ratings mean)
-        predictionArray += np.mean(predictionArray)
-
-        # Add user bias
-        predictionArray = np.transpose(np.transpose(predictionArray)
-                                       + self.bUsers.values)
-
-        # Add item bias
-        predictionArray += self.bContextualItemMeans.values
-        self.normalisedPredictionArray = pd.DataFrame(predictionArray,
-                                                      index=self.originalRatings.index,
-                                                      columns=self.originalRatings.columns)
-        """
-
         firstRegularisedRMSE = regularisedRMSEs[0]
         firstRMSE = sqrt((1/ratings) * firstRegularisedRMSE)
         print("\nFirst RMSE: {0}".format(firstRMSE))
@@ -272,8 +255,16 @@ class Recommender():
 
         return error
 
-    def getRecommendation(self, userID, context):
-        pass
+    def recommendation(self, userID, context):
+        recommendations = []
+        for itemID in self.itemIDs():
+            recommendedRating = self.predictedRating(userID, itemID)
+
+    def userIDs(self):
+        return list(self.originalRatings.index.values)
+
+    def itemIDs(self):
+        return list(self.originalRatings.columns.values)
 
 
 # Section End

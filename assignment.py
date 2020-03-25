@@ -165,72 +165,98 @@ def editProfile(userID, books, ratings):
 
 # Section: Main UI program
 
+class RecommendationUI:
 
-def main():
+    def __init__(self):
+        self.RS = Recommender(train=False)
 
-    predictionDF = getPredictionDF(books, ratings)
+    def run(self):
+        self.running = True
+        while self.running:
+            self.login()
 
-    exit = False
-    while not exit:
-        print("*** Login page ***")
-        userID = input("Enter User ID: ")
+            self.loggedIn = True
+            while self.loggedIn:
+                self.setMood()
 
-        # If non valid ID
-        if not userID.isdigit():
-            continue
-        userID = int(userID)
+                self.moodSet = True
+                while self.moodSet:
+                    self.menu()
 
-        logout = False
-        while not logout:
-            print("\n*** Main Menu ***")
-            print("1. Get recommendation")
-            print("2. Edit user profile")
-            print("8. Logout")
-            print("9. Exit")
+    def login(self):
+        print("\n\n*** Login page ***\n")
 
-            menuChoice = input("\nEnter choice: ")
+        self.userID = None
+        self.userIDs = self.RS.users()
+        while self.userID is None or self.userID not in self.userIDs:
+            self.userID = int(input("Enter User ID: "))
+        print("\nLogin successful!")
+        print(f"Welcome back User {self.userID}")
 
-            if menuChoice == "1":
-                recommendSize = input("\nHow many recommended books would "
-                                      "you like? (default: 5): ")
-                if recommendSize.isdigit():
-                    recommendSize = int(recommendSize)
-                else:
-                    recommendSize = 5
+    def setMood(self):
+        print("\n\n*** Mood Menu ***")
+        print("\nWhat current mood are you in?\n")
+        print("Happy")
+        print("Sad")
+        print("Active")
+        print("Lazy\n")
+        self.mood = None
+        while self.mood not in ["happy", "sad", "active", "lazy"]:
+            self.mood = input("Enter mood: ").lower()
+        print("\nMood set")
+        print(f"You are feeling {self.mood}")
 
-                recommendedBooks = getRecommendedBooks(userID, books, ratings,
-                                                       predictionDF,
-                                                       recommendSize)
+    def menu(self):
+        print("\n\n*** Main Menu ***")
+        print("1. Get recommendation")
+        print("2. Edit user profile")
+        print("7. Change mood")
+        print("8. Logout")
+        print("9. Exit\n")
 
-                print("\nBased on your previous ratings, "
-                      "here are your {0} recommended books:".format(recommendSize))
-                print(recommendedBooks.rename(columns={"bookID": 'Book ID',
-                                                       "bookTitle": 'Book Title',
-                                                       "bookGenre": 'Book Genres'}
-                                              ).to_string(index=False))
+        menuChoice = input("Enter choice: ")
 
-            elif menuChoice == "2":
-                editProfile(userID, books, ratings)
+        if menuChoice == "1":
+            self.recommendation()
+            print("Recommended")
 
-            elif menuChoice == "8":
-                logout = True
+        elif menuChoice == "2":
+            #editProfile(userID, books, ratings)
+            print("Editted profile")
 
-            elif menuChoice == "9":
-                logout = True
-                exit = True
+        elif menuChoice == "7":
+            self.moodSet = False
 
-        if exit:
-            break
+        elif menuChoice == "8":
+            self.moodSet = False
+            self.loggedIn = False
 
-        choice = input("\nExit or Log in? (E or L): ").upper()
-        if choice == "E":
-            exit = True
+        elif menuChoice == "9":
+            self.moodSet = False
+            self.loggedIn = False
+            self.running = False
+
+    def recommendation(self):
+        recommendationSize = input("\nHow many recommended music tracks "
+                                   "would you like? (default is 5): ")
+        if recommendationSize.isdigit():
+            recommendationSize = int(recommendationSize)
         else:
-            print("\n")
+            recommendationSize = 5
+
+        recommendedMusic = self.RS.recommendation(userID, mood,
+                                                  recommendationSize)
+
+        print(f"\nBased on your previous ratings, here are your "
+              "{recommendationSize} recommended music tracks:")
+        counter = 1
+        for musicTrack in recommendedMusic:
+            print(f"{counter}. {musicTrack.title} by {musicTrack.artist}")
+            counter += 1
 
 
 # Section End
 
-RS = Recommender(context=False)
-
-contextRS = Recommender(context=True)
+if __name__ == "__main__":
+    RSUI = RecommendationUI()
+    RSUI.run()
