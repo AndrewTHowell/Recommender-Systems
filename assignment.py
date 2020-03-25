@@ -217,7 +217,7 @@ class RecommendationUI:
         menuChoice = input("Enter choice: ")
 
         if menuChoice == "1":
-            self.recommendation()
+            self.giveRecommendation()
 
         elif menuChoice == "2":
             #editProfile(userID, books, ratings)
@@ -235,7 +235,7 @@ class RecommendationUI:
             self.loggedIn = False
             self.running = False
 
-    def recommendation(self):
+    def giveRecommendation(self):
         recommendationSize = input("\nHow many recommended music tracks "
                                    "would you like? (default is 5): ")
         if recommendationSize.isdigit():
@@ -243,8 +243,8 @@ class RecommendationUI:
         else:
             recommendationSize = 5
 
-        recommendedMusic = self.RS.recommendation(self.userID, self.mood,
-                                                  recommendationSize)
+        recommendedMusic = self.RS.getRecommendation(self.userID, self.mood,
+                                                     recommendationSize)
 
         print(f"\nBased on your previous ratings, here are your "
               "{recommendationSize} recommended music tracks:")

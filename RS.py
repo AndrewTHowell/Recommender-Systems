@@ -258,7 +258,7 @@ class Recommender():
         return error
 
     # Output: [{"title": _, "artist": _},...] ordered by best predicted rating
-    def recommendation(self, userID, context, size):
+    def getRecommendation(self, userID, context, size):
         recommendations = []
         for itemID in self.itemIDs():
             predictedRating = self.predictedRating(userID, itemID)
