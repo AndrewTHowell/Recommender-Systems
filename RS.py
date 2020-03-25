@@ -59,6 +59,8 @@ class Recommender():
                                                      columns="itemID",
                                                      values="rating")
 
+        self.musicTracks = pd.read_csv(DATASETPATH+"//Music.csv", index_col=0)
+
         if self.context:
             itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
                                                            ).mean().reset_index()
@@ -255,10 +257,26 @@ class Recommender():
 
         return error
 
-    def recommendation(self, userID, context):
+    # Output: [{"title": _, "artist": _},...] ordered by best predicted rating
+    def recommendation(self, userID, context, size):
         recommendations = []
         for itemID in self.itemIDs():
-            recommendedRating = self.predictedRating(userID, itemID)
+            predictedRating = self.predictedRating(userID, itemID)
+            recommendations.append({"itemID": itemID,
+                                    "predictedRating": predictedRating})
+
+        recommendations.sort(key=lambda track: track["predictedRating"],
+                             reverse=True)
+
+        recommendations = recommendations[:size]
+
+        for recommendation in recommendations:
+            itemID = recommendation["itemID"]
+            musicTrack = self.musicTracks.loc[itemID]
+            recommendation["title"] = musicTrack["title"]
+            recommendation["artist"] = musicTrack["artist"]
+
+        return recommendations
 
     def userIDs(self):
         return list(self.originalRatings.index.values)
@@ -268,3 +286,5 @@ class Recommender():
 
 
 # Section End
+
+RS = Recommender(train=False)

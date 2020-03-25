@@ -187,7 +187,7 @@ class RecommendationUI:
         print("\n\n*** Login page ***\n")
 
         self.userID = None
-        self.userIDs = self.RS.users()
+        self.userIDs = self.RS.userIDs()
         while self.userID is None or self.userID not in self.userIDs:
             self.userID = int(input("Enter User ID: "))
         print("\nLogin successful!")
@@ -218,7 +218,6 @@ class RecommendationUI:
 
         if menuChoice == "1":
             self.recommendation()
-            print("Recommended")
 
         elif menuChoice == "2":
             #editProfile(userID, books, ratings)
@@ -244,14 +243,16 @@ class RecommendationUI:
         else:
             recommendationSize = 5
 
-        recommendedMusic = self.RS.recommendation(userID, mood,
+        recommendedMusic = self.RS.recommendation(self.userID, self.mood,
                                                   recommendationSize)
 
         print(f"\nBased on your previous ratings, here are your "
               "{recommendationSize} recommended music tracks:")
         counter = 1
         for musicTrack in recommendedMusic:
-            print(f"{counter}. {musicTrack.title} by {musicTrack.artist}")
+            title = musicTrack["title"]
+            artist = musicTrack["artist"]
+            print(f"{counter}. {title} by {artist}")
             counter += 1
 
 
