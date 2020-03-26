@@ -30,9 +30,9 @@ DATASETPATH = dirname(abspath(__file__)) + "\\Dataset\\"
 # number of latent features
 K = 30
 
-EPOCHS = 16
+EPOCHS = 40
 REGULARISATIONLAMBDA = 0.02
-LEARNINGRATE = 0.015
+LEARNINGRATE = 0.05
 THRESHOLD = 0.1
 
 # Section End
@@ -98,7 +98,8 @@ class Recommender():
         if os.path.exists(MODELPATH) and os.path.isdir(MODELPATH):
             # Directory is not empty
             if os.listdir(MODELPATH):
-                self.predictionDF = pd.read_csv(MODELPATH + "predictionDF.csv")
+                self.predictionDF = pd.read_csv(MODELPATH + "predictionDF.csv",
+                                                index_col=0)
                 return
         else:
             try:
@@ -206,7 +207,7 @@ class Recommender():
         self.generatePredictionDataFrame()
 
         # Save trained model
-        #self.predictionDF.to_csv(MODELPATH + "predictionDF.csv")
+        self.predictionDF.to_csv(MODELPATH + "predictionDF.csv")
 
     def setupPredictionR(self):
         # Convert to np array
@@ -313,27 +314,36 @@ class Recommender():
         return error
 
     # Output: [{"title": _, "artist": _},...] ordered by best predicted rating
-    def getRecommendation(self, userID, context, size):
-        recommendations = []
-        for itemID in self.itemIDs():
-            predictedRating = self.predictedRating(userID, itemID)
-            recommendations.append({"itemID": itemID,
-                                    "predictedRating": predictedRating})
+    def getRecommendation(self, userID, mood, size):
+        recommendations = self.predictionDF.loc[userID]
 
-        recommendations.sort(key=lambda track: track["predictedRating"],
-                             reverse=True)
+        recommendations.sort_values(ascending=False, inplace=True)
 
-        recommendations = recommendations[:size]
+        recommendedItemIDs = []
+
+        for itemID, value in recommendations.iteritems():
+            print(userID)
+            print(itemID)
+            print(mood)
+            Pk = self.contextualProbability(userID, itemID, mood)
+
+            if Pk > THRESHOLD:
+                recommendedItemIDs.append(int(itemID))
+                if len(recommendedItemIDs) == size:
+                    break
 
         recommendedTracks = []
-        for recommendation in recommendations:
-            itemID = recommendation["itemID"]
-            recommendedTrack = self.getTrackInfo(itemID)
+        for recommendedItemID in recommendedItemIDs:
+            recommendedTrack = self.getTrackInfo(recommendedItemID)
             recommendedTracks.append(recommendedTrack)
 
         return recommendedTracks
 
+    def contextualProbability(self, userID, itemID, mood):
+        return 0.5
+
     def getTrackInfo(self, itemID):
+        print(self.musicTracks.to_string())
         musicTrack = self.musicTracks.loc[itemID]
         track = {}
         track["itemID"] = itemID
@@ -391,5 +401,6 @@ class Recommender():
 
 # Section End
 
-RS = Recommender()
 RSc = Recommender(context=False)
+
+print(RSc.getRecommendation(1006, "sad", 5))
