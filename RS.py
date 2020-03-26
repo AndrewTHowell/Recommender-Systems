@@ -72,64 +72,11 @@ class Recommender():
         if train:
             self.train()
 
-    def setupPredictionDF(self):
-        # Convert to np array
-        ratings = self.originalRatings.values
+    def userIDs(self):
+        return list(self.originalRatings.index.values)
 
-        # Find mean of all ratings
-        self.ratingsMean = np.nanmean(ratings)
-
-        # Find mean of ratings per user
-        userRatingsMean = np.nanmean(ratings, axis=1)
-
-        self.bUsers = pd.Series(userRatingsMean - self.ratingsMean,
-                                index=self.originalRatings.index)
-
-        # Find mean of ratings per item
-        itemRatingsMean = np.nanmean(ratings, axis=0)
-
-        self.bItems = pd.Series(itemRatingsMean - self.ratingsMean,
-                                index=self.originalRatings.columns)
-
-        # Convert NaNs to 0
-        ratings = np.nan_to_num(ratings)
-
-        # Run Singular Value Decomposition on the matrix
-        # U: user features matrix - how much users like each feature
-        # Σ: diagonal matrix singular values/weights
-        # V^T: music features matrix - how relevant each feature is to each music
-        U, sigma, Vt = svds(ratings, k=min(ratings.shape)-1)
-
-        # Reconvert the sum back into a diagonal matrix
-        sigma = np.diag(sigma)
-
-        # Dot product of sigma Vt
-        sigmaVt = np.dot(sigma, Vt)
-
-        self.P = U
-        self.Q = Vt
-
-        # Follow the formula ratings formula R=UΣ(V^T)
-        self.predictionMatrix = np.dot(U, sigmaVt)
-
-        self.predictionDF = pd.DataFrame(self.predictionMatrix,
-                                         index=self.originalRatings.index,
-                                         columns=self.originalRatings.columns)
-
-    def setupContextItems(self):
-        # Convert to np array
-        ratings = self.contextualItems.values
-
-        # Find mean of ratings per user
-        itemRatingsMean = np.nanmean(ratings, axis=1)
-
-        self.bContextualItemMeans = pd.Series(itemRatingsMean - self.ratingsMean,
-                                              index=self.originalRatings.columns)
-
-        # Find mean of all ratings
-        contextualMean = np.nanmean(ratings)
-
-        self.bContextualItems = np.nan_to_num(ratings - contextualMean)
+    def itemIDs(self):
+        return list(self.originalRatings.columns.values)
 
     def train(self):
         self.setupPredictionDF()
@@ -230,6 +177,65 @@ class Recommender():
         plt.plot(regularisedRMSEs)
         plt.show()
 
+    def setupPredictionDF(self):
+        # Convert to np array
+        ratings = self.originalRatings.values
+
+        # Find mean of all ratings
+        self.ratingsMean = np.nanmean(ratings)
+
+        # Find mean of ratings per user
+        userRatingsMean = np.nanmean(ratings, axis=1)
+
+        self.bUsers = pd.Series(userRatingsMean - self.ratingsMean,
+                                index=self.originalRatings.index)
+
+        # Find mean of ratings per item
+        itemRatingsMean = np.nanmean(ratings, axis=0)
+
+        self.bItems = pd.Series(itemRatingsMean - self.ratingsMean,
+                                index=self.originalRatings.columns)
+
+        # Convert NaNs to 0
+        ratings = np.nan_to_num(ratings)
+
+        # Run Singular Value Decomposition on the matrix
+        # U: user features matrix - how much users like each feature
+        # Σ: diagonal matrix singular values/weights
+        # V^T: music features matrix - how relevant each feature is to each music
+        U, sigma, Vt = svds(ratings, k=min(ratings.shape)-1)
+
+        # Reconvert the sum back into a diagonal matrix
+        sigma = np.diag(sigma)
+
+        # Dot product of sigma Vt
+        sigmaVt = np.dot(sigma, Vt)
+
+        self.P = U
+        self.Q = Vt
+
+        # Follow the formula ratings formula R=UΣ(V^T)
+        self.predictionMatrix = np.dot(U, sigmaVt)
+
+        self.predictionDF = pd.DataFrame(self.predictionMatrix,
+                                         index=self.originalRatings.index,
+                                         columns=self.originalRatings.columns)
+
+    def setupContextItems(self):
+        # Convert to np array
+        ratings = self.contextualItems.values
+
+        # Find mean of ratings per user
+        itemRatingsMean = np.nanmean(ratings, axis=1)
+
+        self.bContextualItemMeans = pd.Series(itemRatingsMean - self.ratingsMean,
+                                              index=self.originalRatings.columns)
+
+        # Find mean of all ratings
+        contextualMean = np.nanmean(ratings)
+
+        self.bContextualItems = np.nan_to_num(ratings - contextualMean)
+
     def actualRating(self, userID, itemID):
         return self.originalRatings.loc[userID][itemID]
 
@@ -278,12 +284,6 @@ class Recommender():
 
         return recommendedTracks
 
-    def userIDs(self):
-        return list(self.originalRatings.index.values)
-
-    def itemIDs(self):
-        return list(self.originalRatings.columns.values)
-
     def getTrackInfo(self, itemID):
         musicTrack = self.musicTracks.loc[itemID]
         track = {}
@@ -310,8 +310,8 @@ class Recommender():
     def getUserRating(self, userID, itemID, mood):
         for index, ratingRow in self.contextualRatings.iterrows():
             if (ratingRow["userID"] == userID
-                and ratingRow["mood"] == mood
-                and ratingRow["itemID"] == itemID):
+                    and ratingRow["mood"] == mood
+                    and ratingRow["itemID"] == itemID):
 
                 userRating = {}
                 userRating["context"] = ratingRow["mood"]
