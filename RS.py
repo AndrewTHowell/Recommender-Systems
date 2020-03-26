@@ -50,10 +50,10 @@ class Recommender():
         self.context = context
         self.threshold = THRESHOLD
 
-        contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
+        self.contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
 
-        userItemRatings = contextualRatings.groupby(["userID", "itemID"]
-                                                    ).mean().reset_index()
+        userItemRatings = self.contextualRatings.groupby(["userID", "itemID"]
+                                                         ).mean().reset_index()
 
         self.originalRatings = userItemRatings.pivot(index="userID",
                                                      columns="itemID",
@@ -62,8 +62,8 @@ class Recommender():
         self.musicTracks = pd.read_csv(DATASETPATH+"//Music.csv", index_col=0)
 
         if self.context:
-            itemContextRatings = contextualRatings.groupby(["itemID", "mood"]
-                                                           ).mean().reset_index()
+            itemContextRatings = self.contextualRatings.groupby(["itemID", "mood"]
+                                                                ).mean().reset_index()
 
             self.contextualItems = itemContextRatings.pivot(index="itemID",
                                                             columns="mood",
@@ -270,13 +270,13 @@ class Recommender():
 
         recommendations = recommendations[:size]
 
+        recommendedTracks = []
         for recommendation in recommendations:
             itemID = recommendation["itemID"]
-            musicTrack = self.musicTracks.loc[itemID]
-            recommendation["title"] = musicTrack["title"]
-            recommendation["artist"] = musicTrack["artist"]
+            recommendedTrack = self.getTrackInfo(itemID)
+            recommendedTracks.append(recommendedTrack)
 
-        return recommendations
+        return recommendedTracks
 
     def userIDs(self):
         return list(self.originalRatings.index.values)
@@ -284,7 +284,58 @@ class Recommender():
     def itemIDs(self):
         return list(self.originalRatings.columns.values)
 
+    def getTrackInfo(self, itemID):
+        musicTrack = self.musicTracks.loc[itemID]
+        track = {}
+        track["itemID"] = itemID
+        track["title"] = musicTrack["title"]
+        track["artist"] = musicTrack["artist"]
+
+        return track
+
+    def getUserRatings(self, userID, mood):
+        userRatings = []
+        for index, ratingRow in self.contextualRatings.iterrows():
+            if ratingRow["userID"] == userID and ratingRow["mood"] == mood:
+                userRating = {}
+                userRating["context"] = ratingRow["mood"]
+                userRating["rating"] = ratingRow["rating"]
+                userRating["itemID"] = ratingRow["itemID"]
+                trackInfo = self.getTrackInfo(userRating["itemID"])
+                userRating["track"] = trackInfo
+                userRatings.append(userRating)
+
+        return userRatings
+
+    def getUserRating(self, userID, itemID, mood):
+        for index, ratingRow in self.contextualRatings.iterrows():
+            if (ratingRow["userID"] == userID
+                and ratingRow["mood"] == mood
+                and ratingRow["itemID"] == itemID):
+
+                userRating = {}
+                userRating["context"] = ratingRow["mood"]
+                userRating["rating"] = ratingRow["rating"]
+                userRating["itemID"] = ratingRow["itemID"]
+                userRating["index"] = index
+                trackInfo = self.getTrackInfo(userRating["itemID"])
+                userRating["track"] = trackInfo
+                return userRating
+
+    def addRating(self, userID, itemID, mood, rating):
+        df = self.contextualRatings
+        df = df.append({"userID": userID,
+                        "itemID": itemID,
+                        "rating": rating,
+                        "mood": mood,
+                        },
+                       ignore_index=True)
+        self.contextualRatings = df
+
+    def deleteRating(self, userID, itemID, mood):
+        df = self.contextualRatings
+        df.drop(df[(df.userID == userID)
+                   & (df.itemID == itemID)
+                   & (df.mood == mood)].index, inplace=True)
 
 # Section End
-
-RS = Recommender(train=False)
