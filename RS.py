@@ -20,20 +20,19 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Section: Constants
 
-DATASETPATH = dirname(abspath(__file__)) + "//Dataset//"
+MODELPATH = dirname(abspath(__file__)) + "\\Trained Model\\"
+DATASETPATH = dirname(abspath(__file__)) + "\\Dataset\\"
 
 # Section End
 
 # Section: Parameters
 
 # number of latent features
-# Improve by minimising Root Mean Square Error
-# 10 to minimum of ratings array shape should be good
-K = 20
+K = 30
 
-EPOCHS = 20
+EPOCHS = 16
 REGULARISATIONLAMBDA = 0.02
-LEARNINGRATE = 0.05
+LEARNINGRATE = 0.015
 THRESHOLD = 0.1
 
 # Section End
@@ -50,7 +49,8 @@ class Recommender():
         self.context = context
         self.threshold = THRESHOLD
 
-        self.contextualRatings = pd.read_csv(DATASETPATH+"//Contextual Ratings.csv")
+        self.contextualRatings = pd.read_csv(DATASETPATH
+                                             + "//Contextual Ratings.csv")
 
         userItemRatings = self.contextualRatings.groupby(["userID", "itemID"]
                                                          ).mean().reset_index()
@@ -59,15 +59,31 @@ class Recommender():
                                                      columns="itemID",
                                                      values="rating")
 
-        self.musicTracks = pd.read_csv(DATASETPATH+"//Music.csv", index_col=0)
+        self.musicTracks = pd.read_csv(DATASETPATH
+                                       + "//Music.csv", index_col=0)
 
         if self.context:
-            itemContextRatings = self.contextualRatings.groupby(["itemID", "mood"]
-                                                                ).mean().reset_index()
+            musicCategories = pd.read_csv(DATASETPATH
+                                          + "//Music Categories.csv",
+                                          index_col=0)
 
-            self.contextualItems = itemContextRatings.pivot(index="itemID",
-                                                            columns="mood",
-                                                            values="rating")
+            itemGenres = pd.merge(self.musicTracks, musicCategories,
+                                  left_on="categoryID",
+                                  right_index=True,
+                                  sort=False)
+
+            genreContextRatings = pd.merge(self.contextualRatings, itemGenres,
+                                           on="itemID",
+                                           sort=False)
+
+            genreContextRatings = (genreContextRatings
+                                   .groupby(["categoryID", "mood"])
+                                   .mean().reset_index())
+
+            self.genreContextRatings = (genreContextRatings
+                                        .pivot(index="categoryID",
+                                               columns="mood",
+                                               values="rating"))
 
         if train:
             self.train()
@@ -79,15 +95,26 @@ class Recommender():
         return list(self.originalRatings.columns.values)
 
     def train(self):
-        self.setupPredictionDF()
+        if os.path.exists(MODELPATH) and os.path.isdir(MODELPATH):
+            # Directory is not empty
+            if os.listdir(MODELPATH):
+                self.predictionDF = pd.read_csv(MODELPATH + "predictionDF.csv")
+                return
+        else:
+            try:
+                os.mkdir(MODELPATH)
+            except OSError:
+                print("Creation of directory failed")
+
+        self.setupPredictionR()
         if self.context:
             self.setupContextItems()
 
         # Stochastic Gradient Descent
-        regularisedRMSEs = []
+        RMSEs = []
         for epoch in range(self.epochs):
-            print("Epoch {0}".format(epoch + 1), end="\r", flush=True)
-            regularisedRMSE = 0
+            print("Epoch {0}".format(epoch + 1))
+            errorTotal = 0
             ratings = 0
             for itemID in self.originalRatings.columns:
                 itemIndex = self.originalRatings.columns.get_loc(itemID)
@@ -96,8 +123,8 @@ class Recommender():
                     if not np.isnan(self.originalRatings.loc[userID][itemID]):
                         # Values
                         if self.context:
-                            oldBi = self.bContextualItems[itemIndex]
-                            sumOldBi = np.nansum(oldBi)
+                            categoryID = self.getTrackInfo(itemID)["categoryID"]
+                            oldBi = self.bContextualGenres.loc[categoryID].sum()
                         else:
                             oldBi = self.bItems.loc[itemID]
                         oldBu = self.bUsers.loc[userID]
@@ -107,14 +134,11 @@ class Recommender():
 
                         Eiu = self.errorOfPrediction(userID, itemID)
 
-                        # RMSE
-                        RMSE = Eiu ** 2
+                        # Error
+                        error = Eiu ** 2
 
                         # Length
-                        if self.context:
-                            BiSquared = np.linalg.norm(oldBi) ** 2
-                        else:
-                            BiSquared = oldBi ** 2
+                        BiSquared = oldBi ** 2
                         BuSquared = oldBu ** 2
                         QiNormSquared = np.linalg.norm(oldQi) ** 2
                         PuNormSquared = np.linalg.norm(oldPu) ** 2
@@ -124,60 +148,67 @@ class Recommender():
                                   + QiNormSquared
                                   + PuNormSquared)
 
-                        # regularised RMSE
+                        # Error
                         ratings += 1
-                        regularisedRMSE += (RMSE
-                                            + (self.regularisationLambda
-                                               * length))
+                        errorTotal += error
 
                         # Move Pu along toward minimum
-                        newPu = (oldPu + (self.learningRate
-                                          * (Eiu * oldQi
-                                             - (self.regularisationLambda
-                                                * oldPu))))
+                        newPu = (oldPu
+                                 + (self.learningRate
+                                    * ((Eiu * oldQi)
+                                       - (self.regularisationLambda * oldPu))))
                         self.P[userIndex] = newPu
 
                         # Move Qi along toward minimum
-                        newQi = (oldQi + (self.learningRate
-                                          * (Eiu * oldPu
-                                             - (self.regularisationLambda
-                                                * oldQi))))
+                        newQi = (oldQi
+                                 + (self.learningRate
+                                    * ((Eiu * oldPu)
+                                       - (self.regularisationLambda * oldQi))))
                         self.Q[:, itemIndex] = newQi
 
                         # Move Bu along toward minimum
-                        newBu = (oldBu + (self.learningRate
-                                          * (Eiu
-                                             - (self.regularisationLambda
-                                                * oldBu))))
+                        newBu = (oldBu
+                                 + (self.learningRate
+                                    * (Eiu - (self.regularisationLambda
+                                              * oldBu))))
                         self.bUsers.loc[userID] = newBu
 
                         # Move Bi along toward minimum
                         if self.context:
-                            newBi = ((self.learningRate
-                                      * (Eiu - (self.regularisationLambda
-                                                * oldBi))))
-                            self.bContextualItems[itemIndex] += newBi
+                            for categoryID in self.bContextualGenres.index:
+                                for mood in self.bContextualGenres.columns:
+                                    oldBi = (self.bContextualGenres
+                                             .loc[categoryID][mood])
+
+                                    newBi = (oldBi
+                                             + (self.learningRate
+                                                * (Eiu
+                                                   - (self.regularisationLambda
+                                                      * oldBi))))
+                                    (self.bContextualGenres
+                                     .loc[categoryID][mood]) = newBi
                         else:
-                            newBi = (oldBi + (self.learningRate
-                                              * (Eiu
-                                                 - (self.regularisationLambda
-                                                    * oldBi))))
+                            newBi = (oldBi
+                                     + (self.learningRate
+                                        * (Eiu - (self.regularisationLambda
+                                                  * oldBi))))
                             self.bItems.loc[itemID] = newBi
 
-            regularisedRMSEs.append(regularisedRMSE)
+            RMSE = sqrt((1/ratings) * errorTotal)
+            RMSEs.append(RMSE)
 
-        firstRegularisedRMSE = regularisedRMSEs[0]
-        firstRMSE = sqrt((1/ratings) * firstRegularisedRMSE)
-        print("\nFirst RMSE: {0}".format(firstRMSE))
+        print("\nFirst RMSE: {0}".format(RMSEs[0]))
+        print("Final RMSE: {0}".format(RMSEs[-1]))
 
-        finalRegularisedRMSE = regularisedRMSEs[-1]
-        finalRMSE = sqrt((1/ratings) * finalRegularisedRMSE)
-        print("Final RMSE: {0}".format(finalRMSE))
-
-        plt.plot(regularisedRMSEs)
+        plt.plot(RMSEs)
         plt.show()
 
-    def setupPredictionDF(self):
+        self.generatePredictionDataFrame()
+
+        # Save trained model
+        #self.predictionDF.to_csv(MODELPATH + "predictionDF.csv")
+
+    def setupPredictionR(self):
         # Convert to np array
         ratings = self.originalRatings.values
 
@@ -203,7 +234,7 @@ class Recommender():
         # U: user features matrix - how much users like each feature
         # Σ: diagonal matrix singular values/weights
         # V^T: music features matrix - how relevant each feature is to each music
-        U, sigma, Vt = svds(ratings, k=min(ratings.shape)-1)
+        U, sigma, Vt = svds(ratings, k=min(min(ratings.shape)-1, K))
 
         # Reconvert the sum back into a diagonal matrix
         sigma = np.diag(sigma)
@@ -214,27 +245,26 @@ class Recommender():
         self.P = U
         self.Q = Vt
 
-        # Follow the formula ratings formula R=UΣ(V^T)
-        self.predictionMatrix = np.dot(U, sigmaVt)
-
-        self.predictionDF = pd.DataFrame(self.predictionMatrix,
-                                         index=self.originalRatings.index,
-                                         columns=self.originalRatings.columns)
+        predictionMatrix = np.dot(self.P, self.Q)
+        self.predictionR = pd.DataFrame(predictionMatrix,
+                                        index=self.originalRatings.index,
+                                        columns=self.originalRatings.columns)
 
     def setupContextItems(self):
         # Convert to np array
-        ratings = self.contextualItems.values
+        genreContextRatings = self.genreContextRatings.values
 
         # Find mean of ratings per user
-        itemRatingsMean = np.nanmean(ratings, axis=1)
+        genreContextRatingsMean = np.nanmean(genreContextRatings)
 
-        self.bContextualItemMeans = pd.Series(itemRatingsMean - self.ratingsMean,
-                                              index=self.originalRatings.columns)
+        bContextualGenres = np.nan_to_num(genreContextRatings
+                                          - genreContextRatingsMean)
 
-        # Find mean of all ratings
-        contextualMean = np.nanmean(ratings)
-
-        self.bContextualItems = np.nan_to_num(ratings - contextualMean)
+        self.bContextualGenres = pd.DataFrame(bContextualGenres,
+                                              index=(self.genreContextRatings
+                                                     .index),
+                                              columns=(self.genreContextRatings
+                                                       .columns))
 
     def actualRating(self, userID, itemID):
         return self.originalRatings.loc[userID][itemID]
@@ -243,19 +273,38 @@ class Recommender():
         mu = self.ratingsMean
 
         if self.context:
-            itemIndex = self.originalRatings.columns.get_loc(itemID)
-            Bis = self.bContextualItems[itemIndex]
-            Bi = np.nansum(Bis)
+            categoryID = self.getTrackInfo(itemID)["categoryID"]
+            Bi = self.bContextualGenres.loc[categoryID].sum()
         else:
             Bi = self.bItems.loc[itemID]
 
         Bu = self.bUsers.loc[userID]
 
-        qiTpu = self.predictionDF.loc[userID][itemID]
+        qiTpu = self.predictionR.loc[userID][itemID]
 
         predictedRating = (mu + Bi + Bu + qiTpu)
 
         return predictedRating
+
+    def generatePredictionDataFrame(self):
+        predictionMatrix = np.dot(self.P, self.Q)
+
+        predictionMatrix += self.ratingsMean
+
+        Bu = self.bUsers.values
+        predictionMatrix += Bu.reshape(-1, 1)
+
+        if self.context:
+            Bi = self.bContextualGenres.values.sum()
+        else:
+            Bi = self.bItems
+        predictionMatrix += Bi
+
+        self.predictionDF = pd.DataFrame(predictionMatrix,
+                                         index=self.originalRatings.index,
+                                         columns=self.originalRatings.columns)
+
+        print(self.predictionDF)
 
     def errorOfPrediction(self, userID, itemID):
         error = (self.actualRating(userID, itemID)
@@ -290,6 +339,7 @@ class Recommender():
         track["itemID"] = itemID
         track["title"] = musicTrack["title"]
         track["artist"] = musicTrack["artist"]
+        track["categoryID"] = musicTrack["categoryID"]
 
         return track
 
@@ -338,4 +388,8 @@ class Recommender():
                    & (df.itemID == itemID)
                    & (df.mood == mood)].index, inplace=True)
 
+
 # Section End
+
+RS = Recommender()
+RSc = Recommender(context=False)
