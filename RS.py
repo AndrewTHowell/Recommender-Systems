@@ -91,8 +91,6 @@ class Recommender():
 
         self.train()
 
-# Division: Completed Methods
-
     def userIDs(self):
         return list(self.originalRatings.index.values)
 
@@ -327,7 +325,6 @@ class Recommender():
 
         recommendations.sort_values(ascending=False, inplace=True)
 
-        #######################################################################
         # Get neighbourhood of users, half the size of the population, using cosine similarity
         contextFocusedRatings = (self.contextualRatings
                                  [self.contextualRatings.mood == mood])
@@ -370,7 +367,6 @@ class Recommender():
 
         if len(neighbourhood) == 0:
             return []
-        #######################################################################
 
         recommendedItemIDs = []
         for itemID, value in recommendations.iteritems():
@@ -489,10 +485,6 @@ class Recommender():
 
         return MAE
 
-# Division End
-
-# Division: Unfinished Methods
-
     def accuracyOfUsagePredictionsTest(self):
         confusionMatrix = pd.DataFrame(data={"Recommended": [0, 0],
                                              "Not recommended": [0, 0]},
@@ -563,8 +555,6 @@ class Recommender():
                    , loc='upper left')
 
         plt.show()
-
-# Division End
 
 
 # Section End
