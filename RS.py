@@ -34,7 +34,7 @@ EPOCHS = 30
 REGULARISATIONLAMBDA = 0.02
 LEARNINGRATE = 0.05
 
-THRESHOLD = 0.2
+THRESHOLD = 0.3
 
 # Section End
 
@@ -346,15 +346,17 @@ class Recommender():
         if userRowNorm == 0:
             return []
         for otherUserID, otherUserRow in contextFocusedRatings.iterrows():
-            if otherUserID != userID:
-                otherUserRow = otherUserRow.values
-                dotProduct = np.dot(userRow, otherUserRow)
-                otherUserRowNorm = np.linalg.norm(otherUserRow)
+            otherUserRow = otherUserRow.values
+            dotProduct = np.dot(userRow, otherUserRow)
+            otherUserRowNorm = np.linalg.norm(otherUserRow)
 
-                similarity = dotProduct/(userRowNorm * otherUserRowNorm)
+            if otherUserRowNorm == 0:
+                continue
 
-                similarities.append({"userID": otherUserID,
-                                     "similarity": similarity})
+            similarity = dotProduct/(userRowNorm * otherUserRowNorm)
+
+            similarities.append({"userID": otherUserID,
+                                 "similarity": similarity})
 
         similarities.sort(key=lambda s: s["similarity"], reverse=True)
         neighbourhood = []
@@ -402,17 +404,18 @@ class Recommender():
 
         return track
 
-    def getUserRatings(self, userID, mood):
+    def getUserRatings(self, userID, mood=None):
         userRatings = []
         for index, ratingRow in self.contextualRatings.iterrows():
-            if ratingRow["userID"] == userID and ratingRow["mood"] == mood:
-                userRating = {}
-                userRating["context"] = ratingRow["mood"]
-                userRating["rating"] = ratingRow["rating"]
-                userRating["itemID"] = ratingRow["itemID"]
-                trackInfo = self.getTrackInfo(userRating["itemID"])
-                userRating["track"] = trackInfo
-                userRatings.append(userRating)
+            if ratingRow["userID"] == userID:
+                if mood is None or ratingRow["mood"] == mood:
+                    userRating = {}
+                    userRating["context"] = ratingRow["mood"]
+                    userRating["rating"] = ratingRow["rating"]
+                    userRating["itemID"] = ratingRow["itemID"]
+                    trackInfo = self.getTrackInfo(userRating["itemID"])
+                    userRating["track"] = trackInfo
+                    userRatings.append(userRating)
 
         return userRatings
 
@@ -493,23 +496,71 @@ class Recommender():
                                              "Not recommended": [0, 0]},
                                        index=["Used", "Not used"])
 
-        for userID in range(1001, 1044):
+        for userID in [1012, 1019, 1033]:
+            userRatings = self.getUserRatings(userID)
+            numUserRatings = len(userRatings)
+
+            userRated = 0
+            userNotRated = 0
             for mood in ["happy", "sad", "active", "lazy"]:
-                userMoodCount = 0
-                for recommendation in RS.getRecommendation(userID, mood, 10):
+                for recommendation in RS.getRecommendation(userID, mood, 5):
                     if RS.getUserRating(userID, recommendation["itemID"], mood):
-                        userMoodCount += 1
-                print(f"User {userID} whilst {mood}: {userMoodCount}")
+                        userRated += 1
+                    else:
+                        userNotRated += 1
 
-        precision = (confusionMatrix.loc["Used"]["Recommended"]
-                     / (confusionMatrix.loc["Used"]["Recommended"]
-                        + confusionMatrix.loc["Not used"]["Recommended"]))
+            confusionMatrix.loc["Used"]["Recommended"] += userRated
+            confusionMatrix.loc["Not used"]["Recommended"] += userNotRated
+            confusionMatrix.loc["Used"]["Not recommended"] += (numUserRatings
+                                                               - userRated)
 
-        recall = (confusionMatrix.loc["Used"]["Recommended"]
-                  / (confusionMatrix.loc["Used"]["Recommended"]
-                     + confusionMatrix.loc["Used"]["Not recommended"]))
+        TP = confusionMatrix.loc["Used"]["Recommended"]
+        FP = confusionMatrix.loc["Not used"]["Recommended"]
+        FN = confusionMatrix.loc["Used"]["Not recommended"]
+
+        if TP + FP != 0:
+            precision = (TP/(TP + FP))
+        else:
+            precision = 0
+
+        if TP + FN != 0:
+            recall = (TP/(TP + FN))
+        else:
+            recall = 0
 
         return {"precision": precision, "recall": recall}
+
+    def calcTHRESHOLD(self):
+        precisionResults = []
+        recallResults = []
+        averageResults = []
+        thresholds = []
+
+        # 0.0 - 0.5
+        step = 0.02
+        for i in range(51):
+            global THRESHOLD
+            THRESHOLD = i * step
+            print(f"\nTHRESHOLD = {THRESHOLD}")
+            results = self.accuracyOfUsagePredictionsTest()
+            precisionResult = results["precision"]
+            recallResult = results["recall"]
+
+            precisionResults.append(precisionResult)
+            recallResults.append(recallResult)
+            averageResults.append((precisionResult + recallResult)/2)
+            thresholds.append(THRESHOLD)
+
+        plt.plot(thresholds, precisionResults)
+        plt.plot(thresholds, recallResults)
+        plt.plot(thresholds, averageResults)
+
+        plt.title('Accuracy of Usage Predictions')
+        plt.xlabel("THRESHOLD")
+        plt.legend(["Precision", "Recall", "Average of Precision and Recall"]
+                   , loc='upper left')
+
+        plt.show()
 
 # Division End
 
@@ -518,4 +569,4 @@ class Recommender():
 
 RS = Recommender(context=True, retrain=False, showGraphs=False)
 
-RS.test()
+RS.calcTHRESHOLD()

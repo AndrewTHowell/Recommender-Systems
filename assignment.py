@@ -33,7 +33,7 @@ def getRatedBookInfo(userID, books, ratings):
 class RecommendationUI:
 
     def __init__(self):
-        self.RS = Recommender(train=False)
+        self.RS = Recommender(context=True, retrain=True, showGraphs=False)
 
     def run(self):
         self.running = True
@@ -73,7 +73,7 @@ class RecommendationUI:
     def menu(self):
         print("\n\n*** Main Menu ***\n")
 
-        choices = ["Get recommendation",
+        choices = ["Get recommendations",
                    "Edit user profile",
                    "Change mood",
                    "Logout",
@@ -120,6 +120,7 @@ class RecommendationUI:
                 counter += 1
         else:
             print("\nRate more titles in order to get recommendations")
+        print()
 
     def profileMenu(self):
         exitProfile = False
