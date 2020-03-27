@@ -33,7 +33,8 @@ K = 30
 EPOCHS = 40
 REGULARISATIONLAMBDA = 0.02
 LEARNINGRATE = 0.05
-THRESHOLD = 0.1
+
+THRESHOLD = 0
 
 # Section End
 
@@ -315,19 +316,65 @@ class Recommender():
 
     # Output: [{"title": _, "artist": _},...] ordered by best predicted rating
     def getRecommendation(self, userID, mood, size):
+        if userID not in self.predictionDF.index:
+            return []
+
         recommendations = self.predictionDF.loc[userID]
 
         recommendations.sort_values(ascending=False, inplace=True)
 
+        #######################################################################
+        # Get neighbourhood of users, half the size of the population, using cosine similarity
+        contextFocusedRatings = (self.contextualRatings
+                                 [self.contextualRatings.mood == mood])
+
+        contextFocusedRatings = contextFocusedRatings.groupby(["userID", "itemID"]
+                                                              ).mean().reset_index()
+
+        contextFocusedRatings = contextFocusedRatings.pivot(index="userID",
+                                                            columns="itemID",
+                                                            values="rating").fillna(0)
+
+        if userID not in contextFocusedRatings.index:
+            return []
+
+        similarities = []
+        userRow = contextFocusedRatings.loc[userID].values
+        for otherUserID, otherUserRow in contextFocusedRatings.iterrows():
+            if otherUserID != userID:
+                otherUserRow = otherUserRow.values
+                dotProduct = np.dot(userRow, otherUserRow)
+                otherUserRowNorm = np.linalg.norm(otherUserRow)
+                userRowNorm = np.linalg.norm(userRow)
+
+                similarity = dotProduct/(userRowNorm * otherUserRowNorm)
+
+                similarities.append({"userID": otherUserID,
+                                     "similarity": similarity})
+
+        similarities.sort(key=lambda s: s["similarity"], reverse=True)
+        neighbourhood = []
+        for similarity in similarities:
+            if similarity["similarity"] == 0:
+                break
+            neighbourhood.append(similarity["userID"])
+        neighbourhood = neighbourhood[:len(similarities)//2]
+
+        if len(neighbourhood) == 0:
+            return []
+        #######################################################################
+
         recommendedItemIDs = []
-
         for itemID, value in recommendations.iteritems():
-            print(userID)
-            print(itemID)
-            print(mood)
-            Pk = self.contextualProbability(userID, itemID, mood)
+            # Get probability from number of neighbours who rated itemID in mood/total neighbours
+            df = self.contextualRatings.loc[(self.contextualRatings['userID'].isin(neighbourhood))
+                                            & (self.contextualRatings['itemID'] == itemID)
+                                            & (self.contextualRatings['mood'] == mood)]
+            numOfSharedReviews = len(df.index)
 
-            if Pk > THRESHOLD:
+            Pk = numOfSharedReviews/len(neighbourhood)
+
+            if Pk >= THRESHOLD:
                 recommendedItemIDs.append(int(itemID))
                 if len(recommendedItemIDs) == size:
                     break
@@ -339,11 +386,7 @@ class Recommender():
 
         return recommendedTracks
 
-    def contextualProbability(self, userID, itemID, mood):
-        return 0.5
-
     def getTrackInfo(self, itemID):
-        print(self.musicTracks.to_string())
         musicTrack = self.musicTracks.loc[itemID]
         track = {}
         track["itemID"] = itemID
@@ -403,4 +446,8 @@ class Recommender():
 
 RSc = Recommender(context=False)
 
-print(RSc.getRecommendation(1006, "sad", 5))
+for userID in range(1001, 1043):
+    for mood in ["happy", "sad", "active", "lazy"]:
+        print(f"{userID} whilst {mood}")
+        print(RSc.getRecommendation(userID, mood, 5))
+        print()

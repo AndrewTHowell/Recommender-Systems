@@ -109,14 +109,17 @@ class RecommendationUI:
         recommendedMusic = self.RS.getRecommendation(self.userID, self.mood,
                                                      recommendationSize)
 
-        print(f"\nBased on your previous ratings, here are your "
-              f"{recommendationSize} recommended music tracks:")
-        counter = 1
-        for musicTrack in recommendedMusic:
-            title = musicTrack["title"]
-            artist = musicTrack["artist"]
-            print(f"{counter}. {title} by {artist}")
-            counter += 1
+        if len(recommendedMusic) != 0:
+            print(f"\nBased on your previous ratings, here are your "
+                  f"{recommendationSize} recommended music tracks:")
+            counter = 1
+            for musicTrack in recommendedMusic:
+                title = musicTrack["title"]
+                artist = musicTrack["artist"]
+                print(f"{counter}. {title} by {artist}")
+                counter += 1
+        else:
+            print("\nRate more titles in order to get recommendations")
 
     def profileMenu(self):
         exitProfile = False
