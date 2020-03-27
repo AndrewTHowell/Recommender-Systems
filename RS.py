@@ -30,11 +30,11 @@ DATASETPATH = dirname(abspath(__file__)) + "\\Dataset\\"
 # number of latent features
 K = 30
 
-EPOCHS = 40
+EPOCHS = 30
 REGULARISATIONLAMBDA = 0.02
 LEARNINGRATE = 0.05
 
-THRESHOLD = 0
+THRESHOLD = 0.2
 
 # Section End
 
@@ -43,12 +43,15 @@ THRESHOLD = 0
 
 class Recommender():
 
-    def __init__(self, context=True, train=True):
+    def __init__(self, context=True, retrain=False, showGraphs=True):
         self.epochs = EPOCHS
         self.regularisationLambda = REGULARISATIONLAMBDA
         self.learningRate = LEARNINGRATE
-        self.context = context
         self.threshold = THRESHOLD
+
+        self.context = context
+        self.retrain = retrain
+        self.showGraphs = showGraphs
 
         self.contextualRatings = pd.read_csv(DATASETPATH
                                              + "//Contextual Ratings.csv")
@@ -86,8 +89,9 @@ class Recommender():
                                                columns="mood",
                                                values="rating"))
 
-        if train:
-            self.train()
+        self.train()
+
+# Division: Completed Methods
 
     def userIDs(self):
         return list(self.originalRatings.index.values)
@@ -98,7 +102,7 @@ class Recommender():
     def train(self):
         if os.path.exists(MODELPATH) and os.path.isdir(MODELPATH):
             # Directory is not empty
-            if os.listdir(MODELPATH):
+            if os.listdir(MODELPATH) and not self.retrain:
                 self.predictionDF = pd.read_csv(MODELPATH + "predictionDF.csv",
                                                 index_col=0)
                 return
@@ -114,96 +118,104 @@ class Recommender():
 
         # Stochastic Gradient Descent
         RMSEs = []
+        MAEs = []
         for epoch in range(self.epochs):
             print("Epoch {0}".format(epoch + 1))
             errorTotal = 0
+            errorSquaredTotal = 0
             ratings = 0
-            for itemID in self.originalRatings.columns:
+
+            for index, row in self.contextualRatings.iterrows():
+                userID = row["userID"]
+                userIndex = self.originalRatings.index.get_loc(userID)
+                itemID = row["itemID"]
                 itemIndex = self.originalRatings.columns.get_loc(itemID)
-                for userID in self.originalRatings.index:
-                    userIndex = self.originalRatings.index.get_loc(userID)
-                    if not np.isnan(self.originalRatings.loc[userID][itemID]):
-                        # Values
-                        if self.context:
-                            categoryID = self.getTrackInfo(itemID)["categoryID"]
-                            oldBi = self.bContextualGenres.loc[categoryID].sum()
-                        else:
-                            oldBi = self.bItems.loc[itemID]
-                        oldBu = self.bUsers.loc[userID]
+                rating = row["rating"]
+                mood = row["mood"]
 
-                        oldPu = self.P[userIndex]
-                        oldQi = self.Q[:, itemIndex]
+                if self.context:
+                    categoryID = self.getTrackInfo(itemID)["categoryID"]
+                    oldBi = self.bContextualGenres.loc[categoryID][mood]
+                else:
+                    oldBi = self.bItems.loc[itemID]
 
-                        Eiu = self.errorOfPrediction(userID, itemID)
+                oldBu = self.bUsers.loc[userID]
 
-                        # Error
-                        error = Eiu ** 2
+                oldPu = self.P[userIndex]
 
-                        # Length
-                        BiSquared = oldBi ** 2
-                        BuSquared = oldBu ** 2
-                        QiNormSquared = np.linalg.norm(oldQi) ** 2
-                        PuNormSquared = np.linalg.norm(oldPu) ** 2
+                oldQi = self.Q[:, itemIndex]
 
-                        length = (BuSquared
-                                  + BiSquared
-                                  + QiNormSquared
-                                  + PuNormSquared)
+                Eiu = rating - self.predictedRating(userID, itemID)
 
-                        # Error
-                        ratings += 1
-                        errorTotal += error
+                # Move Pu along toward minimum
+                newPu = (oldPu
+                         + (self.learningRate
+                            * ((Eiu * oldQi)
+                               - (self.regularisationLambda * oldPu))))
+                self.P[userIndex] = newPu
 
-                        # Move Pu along toward minimum
-                        newPu = (oldPu
-                                 + (self.learningRate
-                                    * ((Eiu * oldQi)
-                                       - (self.regularisationLambda * oldPu))))
-                        self.P[userIndex] = newPu
+                # Move Qi along toward minimum
+                newQi = (oldQi
+                         + (self.learningRate
+                            * ((Eiu * oldPu)
+                               - (self.regularisationLambda * oldQi))))
+                self.Q[:, itemIndex] = newQi
 
-                        # Move Qi along toward minimum
-                        newQi = (oldQi
-                                 + (self.learningRate
-                                    * ((Eiu * oldPu)
-                                       - (self.regularisationLambda * oldQi))))
-                        self.Q[:, itemIndex] = newQi
+                # Move Bu along toward minimum
+                newBu = (oldBu
+                         + (self.learningRate
+                            * (Eiu - (self.regularisationLambda
+                                      * oldBu))))
+                self.bUsers.loc[userID] = newBu
 
-                        # Move Bu along toward minimum
-                        newBu = (oldBu
-                                 + (self.learningRate
-                                    * (Eiu - (self.regularisationLambda
-                                              * oldBu))))
-                        self.bUsers.loc[userID] = newBu
+                # Move Bi along toward minimum
+                if self.context:
+                    newBi = (oldBi
+                             + (self.learningRate
+                                * (Eiu
+                                   - (self.regularisationLambda
+                                      * oldBi))))
+                    self.bContextualGenres.loc[categoryID][mood] = newBi
+                else:
+                    newBi = (oldBi
+                             + (self.learningRate
+                                * (Eiu - (self.regularisationLambda
+                                          * oldBi))))
+                    self.bItems.loc[itemID] = newBi
 
-                        # Move Bi along toward minimum
-                        if self.context:
-                            for categoryID in self.bContextualGenres.index:
-                                for mood in self.bContextualGenres.columns:
-                                    oldBi = (self.bContextualGenres
-                                             .loc[categoryID][mood])
+                predictionMatrix = np.dot(self.P, self.Q)
+                self.predictionR = pd.DataFrame(predictionMatrix,
+                                                index=self.originalRatings.index,
+                                                columns=self.originalRatings.columns)
 
-                                    newBi = (oldBi
-                                             + (self.learningRate
-                                                * (Eiu
-                                                   - (self.regularisationLambda
-                                                      * oldBi))))
-                                    (self.bContextualGenres
-                                     .loc[categoryID][mood]) = newBi
-                        else:
-                            newBi = (oldBi
-                                     + (self.learningRate
-                                        * (Eiu - (self.regularisationLambda
-                                                  * oldBi))))
-                            self.bItems.loc[itemID] = newBi
+                # Error
+                ratings += 1
 
-            RMSE = sqrt((1/ratings) * errorTotal)
+                error = Eiu
+                errorTotal += abs(error)
+
+                errorSquared = error ** 2
+                errorSquaredTotal += errorSquared
+
+            RMSE = sqrt((1/ratings) * errorSquaredTotal)
             RMSEs.append(RMSE)
+
+            MAE = errorTotal / ratings
+            MAEs.append(MAE)
 
         print("\nFirst RMSE: {0}".format(RMSEs[0]))
         print("Final RMSE: {0}".format(RMSEs[-1]))
 
-        plt.plot(RMSEs)
-        plt.show()
+        if self.showGraphs:
+            plt.plot(RMSEs)
+            plt.show()
+
+        print("\nFirst MAE: {0}".format(MAEs[0]))
+        print("Final MAE: {0}".format(MAEs[-1]))
+
+        if self.showGraphs:
+            plt.plot(MAEs)
+            plt.show()
 
         self.generatePredictionDataFrame()
 
@@ -233,9 +245,6 @@ class Recommender():
         ratings = np.nan_to_num(ratings)
 
         # Run Singular Value Decomposition on the matrix
-        # U: user features matrix - how much users like each feature
-        # Σ: diagonal matrix singular values/weights
-        # V^T: music features matrix - how relevant each feature is to each music
         U, sigma, Vt = svds(ratings, k=min(min(ratings.shape)-1, K))
 
         # Reconvert the sum back into a diagonal matrix
@@ -268,11 +277,12 @@ class Recommender():
                                               columns=(self.genreContextRatings
                                                        .columns))
 
-    def actualRating(self, userID, itemID):
-        return self.originalRatings.loc[userID][itemID]
-
     def predictedRating(self, userID, itemID):
+        qiTpu = self.predictionR.loc[userID][itemID]
+
         mu = self.ratingsMean
+
+        Bu = self.bUsers.loc[userID]
 
         if self.context:
             categoryID = self.getTrackInfo(itemID)["categoryID"]
@@ -280,11 +290,7 @@ class Recommender():
         else:
             Bi = self.bItems.loc[itemID]
 
-        Bu = self.bUsers.loc[userID]
-
-        qiTpu = self.predictionR.loc[userID][itemID]
-
-        predictedRating = (mu + Bi + Bu + qiTpu)
+        predictedRating = (qiTpu + mu + Bu + Bi)
 
         return predictedRating
 
@@ -297,24 +303,20 @@ class Recommender():
         predictionMatrix += Bu.reshape(-1, 1)
 
         if self.context:
-            Bi = self.bContextualGenres.values.sum()
+            Bis = []
+            for itemID in self.originalRatings.columns:
+                categoryID = self.getTrackInfo(itemID)["categoryID"]
+                Bi = self.bContextualGenres.loc[categoryID].sum()
+                Bis.append(Bi)
+            predictionMatrix += Bis
         else:
             Bi = self.bItems
-        predictionMatrix += Bi
+            predictionMatrix += Bi
 
         self.predictionDF = pd.DataFrame(predictionMatrix,
                                          index=self.originalRatings.index,
                                          columns=self.originalRatings.columns)
 
-        print(self.predictionDF)
-
-    def errorOfPrediction(self, userID, itemID):
-        error = (self.actualRating(userID, itemID)
-                 - self.predictedRating(userID, itemID))
-
-        return error
-
-    # Output: [{"title": _, "artist": _},...] ordered by best predicted rating
     def getRecommendation(self, userID, mood, size):
         if userID not in self.predictionDF.index:
             return []
@@ -340,12 +342,14 @@ class Recommender():
 
         similarities = []
         userRow = contextFocusedRatings.loc[userID].values
+        userRowNorm = np.linalg.norm(userRow)
+        if userRowNorm == 0:
+            return []
         for otherUserID, otherUserRow in contextFocusedRatings.iterrows():
             if otherUserID != userID:
                 otherUserRow = otherUserRow.values
                 dotProduct = np.dot(userRow, otherUserRow)
                 otherUserRowNorm = np.linalg.norm(otherUserRow)
-                userRowNorm = np.linalg.norm(userRow)
 
                 similarity = dotProduct/(userRowNorm * otherUserRowNorm)
 
@@ -367,21 +371,23 @@ class Recommender():
         recommendedItemIDs = []
         for itemID, value in recommendations.iteritems():
             # Get probability from number of neighbours who rated itemID in mood/total neighbours
-            df = self.contextualRatings.loc[(self.contextualRatings['userID'].isin(neighbourhood))
-                                            & (self.contextualRatings['itemID'] == itemID)
-                                            & (self.contextualRatings['mood'] == mood)]
+            df = self.contextualRatings.query('(itemID == @itemID)'
+                                              'and (mood == @mood)'
+                                              'and (userID in @neighbourhood)')
+
             numOfSharedReviews = len(df.index)
 
             Pk = numOfSharedReviews/len(neighbourhood)
 
             if Pk >= THRESHOLD:
-                recommendedItemIDs.append(int(itemID))
+                recommendedItemIDs.append([int(itemID), Pk])
                 if len(recommendedItemIDs) == size:
                     break
 
         recommendedTracks = []
         for recommendedItemID in recommendedItemIDs:
-            recommendedTrack = self.getTrackInfo(recommendedItemID)
+            recommendedTrack = self.getTrackInfo(recommendedItemID[0])
+            recommendedTrack["Pk"] = round(recommendedItemID[1], 2)
             recommendedTracks.append(recommendedTrack)
 
         return recommendedTracks
@@ -441,13 +447,77 @@ class Recommender():
                    & (df.itemID == itemID)
                    & (df.mood == mood)].index, inplace=True)
 
+    def test(self):
+        MAE = self.MAE()
+
+        AUPResult = self.accuracyOfUsagePredictionsTest()
+
+        precisionResult = AUPResult["precision"]
+        recallResult = AUPResult["recall"]
+
+        print(f"The MAE for this model is {MAE}")
+
+        print(f"The Precision Result for this model is {precisionResult}")
+
+        print(f"The Recall Result for this model is {recallResult}")
+
+    def MAE(self):
+        differenceTotal = 0
+        for index, row in self.contextualRatings.iterrows():
+            actualRating = row["rating"]
+
+            userID = row["userID"]
+            itemID = row["itemID"]
+            predictedUserRatings = self.predictionDF.loc[userID]
+
+            if isinstance(predictedUserRatings.index[0], np.int64):
+                itemID = np.int64(itemID)
+            else:
+                itemID = str(itemID)
+
+            predictedRating = predictedUserRatings[itemID]
+
+            difference = abs(predictedRating - actualRating)
+            differenceTotal += difference
+
+        MAE = differenceTotal / len(self.contextualRatings.index)
+
+        return MAE
+
+# Division End
+
+# Division: Unfinished Methods
+
+    def accuracyOfUsagePredictionsTest(self):
+        confusionMatrix = pd.DataFrame(data={"Recommended": [0, 0],
+                                             "Not recommended": [0, 0]},
+                                       index=["Used", "Not used"])
+
+        #
+
+        precision = (confusionMatrix.loc["Used"]["Recommended"]
+                     / (confusionMatrix.loc["Used"]["Recommended"]
+                        + confusionMatrix.loc["Not used"]["Recommended"]))
+
+        recall = (confusionMatrix.loc["Used"]["Recommended"]
+                  / (confusionMatrix.loc["Used"]["Recommended"]
+                     + confusionMatrix.loc["Used"]["Not recommended"]))
+
+        return {"precision": precision, "recall": recall}
+
+# Division End
+
 
 # Section End
 
-RSc = Recommender(context=False)
+RS = Recommender(context=True, retrain=False, showGraphs=False)
 
-for userID in range(1001, 1043):
+for userID in range(1001, 1044):
     for mood in ["happy", "sad", "active", "lazy"]:
-        print(f"{userID} whilst {mood}")
-        print(RSc.getRecommendation(userID, mood, 5))
-        print()
+        userMoodCount = 0
+        for recommendation in RS.getRecommendation(userID, mood, 10):
+            if RS.getUserRating(userID, recommendation["itemID"], mood):
+                userMoodCount += 1
+        print(f"User {userID} whilst {mood}: {userMoodCount}")
+
+RS.test()
