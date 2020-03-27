@@ -493,7 +493,13 @@ class Recommender():
                                              "Not recommended": [0, 0]},
                                        index=["Used", "Not used"])
 
-        #
+        for userID in range(1001, 1044):
+            for mood in ["happy", "sad", "active", "lazy"]:
+                userMoodCount = 0
+                for recommendation in RS.getRecommendation(userID, mood, 10):
+                    if RS.getUserRating(userID, recommendation["itemID"], mood):
+                        userMoodCount += 1
+                print(f"User {userID} whilst {mood}: {userMoodCount}")
 
         precision = (confusionMatrix.loc["Used"]["Recommended"]
                      / (confusionMatrix.loc["Used"]["Recommended"]
@@ -511,13 +517,5 @@ class Recommender():
 # Section End
 
 RS = Recommender(context=True, retrain=False, showGraphs=False)
-
-for userID in range(1001, 1044):
-    for mood in ["happy", "sad", "active", "lazy"]:
-        userMoodCount = 0
-        for recommendation in RS.getRecommendation(userID, mood, 10):
-            if RS.getUserRating(userID, recommendation["itemID"], mood):
-                userMoodCount += 1
-        print(f"User {userID} whilst {mood}: {userMoodCount}")
 
 RS.test()
