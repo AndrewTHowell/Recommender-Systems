@@ -33,7 +33,7 @@ def getRatedBookInfo(userID, books, ratings):
 class RecommendationUI:
 
     def __init__(self):
-        self.RS = Recommender(context=True, retrain=True, showGraphs=False)
+        self.RS = Recommender(retrain=True, showGraphs=True)
 
     def run(self):
         self.running = True

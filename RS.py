@@ -30,7 +30,7 @@ DATASETPATH = dirname(abspath(__file__)) + "\\Dataset\\"
 # number of latent features
 K = 30
 
-EPOCHS = 30
+EPOCHS = 50
 REGULARISATIONLAMBDA = 0.02
 LEARNINGRATE = 0.05
 
@@ -119,8 +119,9 @@ class Recommender():
         # Stochastic Gradient Descent
         RMSEs = []
         MAEs = []
+        print("Training Model")
         for epoch in range(self.epochs):
-            print("Epoch {0}".format(epoch + 1))
+            print("Epoch {0}".format(epoch + 1), end="\r", flush=True)
             errorTotal = 0
             errorSquaredTotal = 0
             ratings = 0
@@ -203,19 +204,20 @@ class Recommender():
             MAE = errorTotal / ratings
             MAEs.append(MAE)
 
-        print("\nFirst RMSE: {0}".format(RMSEs[0]))
-        print("Final RMSE: {0}".format(RMSEs[-1]))
-
         if self.showGraphs:
+            print("\nFirst RMSE: {0}".format(RMSEs[0]))
+            print("Final RMSE: {0}".format(RMSEs[-1]))
+
             plt.plot(RMSEs)
             plt.show()
 
-        print("\nFirst MAE: {0}".format(MAEs[0]))
-        print("Final MAE: {0}".format(MAEs[-1]))
+            print("\nFirst MAE: {0}".format(MAEs[0]))
+            print("Final MAE: {0}".format(MAEs[-1]))
 
-        if self.showGraphs:
             plt.plot(MAEs)
             plt.show()
+
+        print("Model Trained")
 
         self.generatePredictionDataFrame()
 
@@ -567,6 +569,4 @@ class Recommender():
 
 # Section End
 
-RS = Recommender(context=True, retrain=False, showGraphs=False)
-
-RS.calcTHRESHOLD()
+RS = Recommender()
